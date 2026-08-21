@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_is_ready, model_path, whisper_engines
-from .core import format_duration, media_duration
+from .core import format_duration, media_duration, output_file, unique_output_base
 from .icon import icon_png
 from .workers import ModelDownloadWorker, TranscriptionWorker
 
@@ -158,6 +158,9 @@ class MainWindow(QMainWindow):
         self.folder_button.clicked.connect(self.choose_output)
         folder_row.addWidget(self.folder_label, 1)
         folder_row.addWidget(self.folder_button)
+        self.output_preview = QLabel("")
+        self.output_preview.setObjectName("status")
+        self.output_preview.setWordWrap(True)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
@@ -186,6 +189,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.drop)
         layout.addWidget(self.file_label)
         layout.addLayout(folder_row)
+        layout.addWidget(self.output_preview)
         layout.addWidget(self.progress)
         layout.addLayout(status_row)
         layout.addWidget(self.start_button)
@@ -233,6 +237,19 @@ class MainWindow(QMainWindow):
             self.output_dir = Path(remembered) if remembered else path.parent
             self.folder_label.setText(f"Output folder: {self.output_dir}")
         self.start_button.setEnabled(True)
+        self._update_output_preview()
+
+    def _update_output_preview(self) -> None:
+        if not self.source or not self.output_dir:
+            self.output_preview.setText("")
+            return
+        try:
+            base = unique_output_base(self.source, self.output_dir)
+        except OSError:
+            self.output_preview.setText("")
+            return
+        txt, srt = output_file(base, ".txt"), output_file(base, ".srt")
+        self.output_preview.setText(f"Will save: {txt.name} and {srt.name}")
 
     def _describe(self, path: Path) -> str:
         try:
@@ -252,6 +269,7 @@ class MainWindow(QMainWindow):
             self.output_dir = Path(chosen)
             self.settings.setValue("output_dir", chosen)
             self.folder_label.setText(f"Output folder: {chosen}")
+            self._update_output_preview()
 
     def start(self) -> None:
         if not self.source or not self.output_dir:
