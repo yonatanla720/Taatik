@@ -6,7 +6,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QElapsedTimer, QSettings, QThread, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
-    QCloseEvent, QDesktopServices, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QIcon, QPixmap,
+    QCloseEvent, QDesktopServices, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QIcon,
+    QKeySequence, QPixmap, QShortcut,
 )
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
@@ -88,6 +89,7 @@ class DropArea(QFrame):
         choose = QPushButton("Choose file")
         choose.clicked.connect(self.choose_file)
         choose.setMinimumWidth(150)
+        choose.setToolTip("Choose a recording (Ctrl+O)")
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addSpacing(8)
@@ -190,6 +192,27 @@ class MainWindow(QMainWindow):
         hints = QApplication.styleHints()
         if hasattr(hints, "colorSchemeChanged"):
             hints.colorSchemeChanged.connect(lambda _scheme: self._apply_theme())
+        self._install_shortcuts()
+
+    def _install_shortcuts(self) -> None:
+        QShortcut(QKeySequence.StandardKey.Open, self, activated=self._shortcut_choose)
+        for key in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            QShortcut(QKeySequence(key), self, activated=self._shortcut_start)
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, activated=self._shortcut_stop)
+        self.start_button.setToolTip("Start transcription (Enter)")
+        self.stop_button.setToolTip("Stop the current task (Esc)")
+
+    def _shortcut_choose(self) -> None:
+        if not self.is_busy:
+            self.drop.choose_file()
+
+    def _shortcut_start(self) -> None:
+        if self.start_button.isVisible() and self.start_button.isEnabled():
+            self.start()
+
+    def _shortcut_stop(self) -> None:
+        if self.is_busy and self.stop_button.isEnabled():
+            self.cancel()
 
     def _apply_theme(self) -> None:
         hints = QApplication.styleHints()
