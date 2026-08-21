@@ -43,25 +43,43 @@ function Get-RemoteFile {
 $WhisperVersion = "v1.9.1"
 $WhisperZip = Join-Path $Downloads "whisper-bin-x64.zip"
 $WhisperUrl = "https://github.com/ggml-org/whisper.cpp/releases/download/$WhisperVersion/whisper-bin-x64.zip"
+# NVIDIA GPU (cuBLAS, CUDA 12.4) engine. Bundled alongside the CPU engine and
+# selected at runtime when an NVIDIA driver is present; otherwise the app falls
+# back to the CPU engine.
+$CudaZip = Join-Path $Downloads "whisper-cublas-12.4.0-bin-x64.zip"
+$CudaUrl = "https://github.com/ggml-org/whisper.cpp/releases/download/$WhisperVersion/whisper-cublas-12.4.0-bin-x64.zip"
 $FfmpegZip = Join-Path $Downloads "ffmpeg-release-essentials.zip"
 $FfmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 
 if (-not (Test-Path $WhisperZip)) { Get-RemoteFile $WhisperUrl $WhisperZip }
+if (-not (Test-Path $CudaZip)) { Get-RemoteFile $CudaUrl $CudaZip }
 if (-not (Test-Path $FfmpegZip)) { Get-RemoteFile $FfmpegUrl $FfmpegZip }
 
 $WhisperExtract = Join-Path $Vendor "whisper"
+$CudaExtract = Join-Path $Vendor "whisper-cuda"
 $FfmpegExtract = Join-Path $Vendor "ffmpeg"
-Remove-Item $WhisperExtract, $FfmpegExtract -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item $WhisperExtract, $CudaExtract, $FfmpegExtract -Recurse -Force -ErrorAction SilentlyContinue
 Expand-Archive $WhisperZip $WhisperExtract
+Expand-Archive $CudaZip $CudaExtract
 Expand-Archive $FfmpegZip $FfmpegExtract
 
 $WhisperExe = Get-ChildItem $WhisperExtract -Recurse -Filter "whisper-cli.exe" | Select-Object -First 1
+$CudaExe = Get-ChildItem $CudaExtract -Recurse -Filter "whisper-cli.exe" | Select-Object -First 1
 $FfmpegExe = Get-ChildItem $FfmpegExtract -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
-if (-not $WhisperExe -or -not $FfmpegExe) { throw "Could not find required executables in downloaded archives." }
+if (-not $WhisperExe -or -not $CudaExe -or -not $FfmpegExe) { throw "Could not find required executables in downloaded archives." }
 
 # whisper-cli uses DLLs shipped beside it. Preserve all runtime files from that directory.
 Copy-Item (Join-Path $WhisperExe.DirectoryName "*") $Bin -Recurse -Force
 Copy-Item $FfmpegExe.FullName (Join-Path $Bin "ffmpeg.exe") -Force
+
+# The CUDA engine keeps its own directory with the bundled CUDA runtime DLLs.
+# Copy only whisper-cli.exe and the DLLs beside it; the archive's other sample
+# executables and test binaries are not needed and would only add bulk.
+$BinCuda = Join-Path $Vendor "bin-cuda"
+Remove-Item $BinCuda -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $BinCuda | Out-Null
+Copy-Item $CudaExe.FullName (Join-Path $BinCuda "whisper-cli.exe") -Force
+Copy-Item (Join-Path $CudaExe.DirectoryName "*.dll") $BinCuda -Force
 
 Set-Location $ProjectRoot
 if (-not (Test-Path ".venv")) { py -3.11 -m venv .venv }

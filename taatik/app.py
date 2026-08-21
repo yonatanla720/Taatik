@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
 
-from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_is_ready, model_path
+from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_is_ready, model_path, whisper_engines
 from .icon import icon_png
 from .workers import ModelDownloadWorker, TranscriptionWorker
 
@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
     def _begin_transcription(self) -> None:
         assert self.source and self.output_dir
         worker = TranscriptionWorker(
-            self.source, self.output_dir, model_path(), bundled_tool("ffmpeg"), bundled_tool("whisper-cli")
+            self.source, self.output_dir, model_path(), bundled_tool("ffmpeg"), whisper_engines()
         )
         self._launch(worker, self._completed)
 

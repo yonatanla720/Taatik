@@ -67,10 +67,11 @@ class TranscriptionWorker(QObject):
     failed = Signal(str)
     cancelled = Signal()
 
-    def __init__(self, source: Path, output_dir: Path, model: Path, ffmpeg: Path, whisper: Path):
+    def __init__(self, source: Path, output_dir: Path, model: Path, ffmpeg: Path, whisper_engines: list[Path]):
         super().__init__()
         self.source, self.output_dir, self.model = source, output_dir, model
-        self.ffmpeg, self.whisper = ffmpeg, whisper
+        self.ffmpeg = ffmpeg
+        self.whisper_engines = list(whisper_engines)
         self._cancel = threading.Event()
         self._process: subprocess.Popen | None = None
         self._lock = threading.Lock()
@@ -92,20 +93,36 @@ class TranscriptionWorker(QObject):
 
     @Slot()
     def run(self) -> None:
-        try:
-            with tempfile.TemporaryDirectory(prefix="taatik-") as temp_dir:
-                txt, srt = transcribe(
-                    self.source, self.output_dir, self.model, self.ffmpeg, self.whisper,
-                    Path(temp_dir) / "audio.wav",
-                    lambda value, text: self.progress.emit(value, text),
-                    on_start=self._on_start,
-                    is_cancelled=self._cancel.is_set,
-                )
-            self.completed.emit(txt, srt)
-        except TranscriptionCancelled:
-            self.cancelled.emit()
-        except Exception as exc:
+        last_error: Exception | None = None
+        for index, engine in enumerate(self.whisper_engines):
             if self._cancel.is_set():
                 self.cancelled.emit()
-            else:
+                return
+            is_last = index == len(self.whisper_engines) - 1
+            try:
+                with tempfile.TemporaryDirectory(prefix="taatik-") as temp_dir:
+                    txt, srt = transcribe(
+                        self.source, self.output_dir, self.model, self.ffmpeg, engine,
+                        Path(temp_dir) / "audio.wav",
+                        lambda value, text: self.progress.emit(value, text),
+                        on_start=self._on_start,
+                        is_cancelled=self._cancel.is_set,
+                    )
+                self.completed.emit(txt, srt)
+                return
+            except TranscriptionCancelled:
+                self.cancelled.emit()
+                return
+            except Exception as exc:
+                last_error = exc
+                if self._cancel.is_set():
+                    self.cancelled.emit()
+                    return
+                if not is_last:
+                    # The GPU engine failed to run; retry on the CPU engine.
+                    self.progress.emit(5, "GPU engine unavailable — switching to CPU…")
+                    continue
                 self.failed.emit(str(exc))
+                return
+        if last_error is not None:
+            self.failed.emit(str(last_error))

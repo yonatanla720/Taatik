@@ -9,6 +9,12 @@ directory. Those files must remain with redistributed copies of the app.
 - **FFmpeg** — https://ffmpeg.org/ — built without GPL or non-free options and
   distributed under the GNU Lesser General Public License, version 2.1 or later.
 - **whisper.cpp / ggml** — https://github.com/ggml-org/whisper.cpp — MIT License.
+- **NVIDIA CUDA runtime libraries** (Windows only) — cuBLAS, cuBLASLt, CUDA
+  runtime, and NVRTC redistributable DLLs from the CUDA Toolkit, redistributed
+  under the NVIDIA CUDA Toolkit End User License Agreement
+  (https://docs.nvidia.com/cuda/eula/). These accompany the prebuilt cuBLAS
+  whisper.cpp binaries and are used only to accelerate transcription on machines
+  with an NVIDIA GPU; the app runs the CPU engine everywhere else.
 - **PySide6, Shiboken6, and Qt** — https://www.qt.io/qt-for-python — distributed
   under the license choices included with the installed PySide6 packages,
   including the GNU Lesser General Public License, version 3. The generated app

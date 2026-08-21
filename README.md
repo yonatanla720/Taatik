@@ -114,6 +114,12 @@ The script downloads whisper.cpp Windows binaries and an FFmpeg essentials
 build, runs the tests, creates a standalone PyInstaller app, and produces
 `release\Taatik-Setup-1.0.0.exe`. The model remains a first-use download.
 
+The Windows build bundles two transcription engines: the CPU engine and an
+NVIDIA GPU engine (whisper.cpp cuBLAS, CUDA 12.4). At runtime Taatik uses the
+GPU engine when an NVIDIA driver is present and otherwise falls back to the CPU
+engine, so the app runs on any 64-bit Windows machine. The bundled CUDA runtime
+libraries make the installer substantially larger (roughly half a gigabyte).
+
 ## Run from source
 
 For GUI development:
@@ -136,8 +142,10 @@ the checkout; the packaged builds always use their bundled copies.
   downloads are discarded so a corrupt model is never used.
 - **Installation incomplete:** reinstall from the DMG or Windows setup file.
   The app checks both bundled engines before starting.
-- **Slow transcription:** the Large V3 Turbo model is demanding and CPU speed
-  varies. Keep the laptop connected to power for long recordings.
+- **Slow transcription:** the Large V3 Turbo model is demanding. On Windows
+  machines with an NVIDIA GPU, Taatik uses the GPU engine automatically and is
+  much faster; without one it runs on the CPU, where speed varies. macOS uses
+  the GPU on Apple Silicon. Keep laptops connected to power for long recordings.
 - **Disk space:** allow roughly 2 GB for the model plus temporary space close to
   the uncompressed audio size.
 - **macOS app will not open:** an ad-hoc local build has the Gatekeeper

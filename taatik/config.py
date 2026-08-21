@@ -40,12 +40,47 @@ def model_is_ready(path: Path | None = None) -> bool:
         return False
 
 
+def _bundle_root() -> Path:
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+
+
 def bundled_tool(name: str) -> Path:
     """Locate an executable in a PyInstaller bundle or a source checkout."""
-    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+    base = _bundle_root()
     suffix = ".exe" if sys.platform == "win32" else ""
     candidates = [base / "bin" / f"{name}{suffix}", base / f"{name}{suffix}"]
     for candidate in candidates:
         if candidate.exists():
             return candidate
     return candidates[0]
+
+
+def _nvidia_driver_present() -> bool:
+    """True when the NVIDIA CUDA driver is installed, so the GPU engine can run."""
+    if sys.platform != "win32":
+        return False
+    import ctypes
+
+    try:
+        ctypes.WinDLL("nvcuda.dll")
+        return True
+    except OSError:
+        return False
+
+
+def whisper_engines() -> list[Path]:
+    """whisper-cli engines to try, GPU first when an NVIDIA driver is present.
+
+    The CUDA build lives in ``bin-cuda`` beside the CPU build in ``bin``. On
+    machines without an NVIDIA driver, only the CPU engine is offered.
+    """
+    base = _bundle_root()
+    suffix = ".exe" if sys.platform == "win32" else ""
+    cuda = base / "bin-cuda" / f"whisper-cli{suffix}"
+    cpu = base / "bin" / f"whisper-cli{suffix}"
+    engines: list[Path] = []
+    if _nvidia_driver_present() and cuda.is_file():
+        engines.append(cuda)
+    if cpu.is_file():
+        engines.append(cpu)
+    return engines or [cpu]

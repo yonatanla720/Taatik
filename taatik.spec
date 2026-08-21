@@ -7,6 +7,7 @@ import tomllib
 root = Path(SPECPATH)
 app_version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
 vendor_bin = Path(os.environ.get("TAATIK_VENDOR_BIN", root / "vendor" / "bin"))
+vendor_bin_cuda = Path(os.environ.get("TAATIK_VENDOR_BIN_CUDA", root / "vendor" / "bin-cuda"))
 license_dir_value = os.environ.get("TAATIK_LICENSE_DIR")
 license_dir = Path(license_dir_value) if license_dir_value else None
 icon_value = os.environ.get("TAATIK_MAC_ICON")
@@ -24,6 +25,10 @@ a = Analysis(
     binaries=[
         (str(path), "bin")
         for path in vendor_bin.glob("*")
+        if path.is_file()
+    ] + [
+        (str(path), "bin-cuda")
+        for path in vendor_bin_cuda.glob("*")
         if path.is_file()
     ],
     datas=datas,
