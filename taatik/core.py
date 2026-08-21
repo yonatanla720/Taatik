@@ -63,6 +63,39 @@ def parse_progress(line: str) -> int | None:
     return min(100, int(match.group(1))) if match else None
 
 
+def parse_duration(text: str) -> float | None:
+    """Extract a media duration in seconds from ffmpeg's ``Duration:`` output."""
+    match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", text)
+    if not match:
+        return None
+    hours, minutes, seconds = match.groups()
+    return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+
+
+def media_duration(ffmpeg: Path, source: Path) -> float | None:
+    """Best-effort media duration in seconds; returns None if it cannot be read."""
+    try:
+        result = subprocess.run(
+            [str(ffmpeg), "-hide_banner", "-i", str(source)],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=15,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    # ffmpeg writes the stream summary (including Duration) to stderr and exits
+    # non-zero because no output was requested; that is expected here.
+    return parse_duration(result.stderr)
+
+
+def format_duration(seconds: float) -> str:
+    total = int(round(seconds))
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes}:{secs:02d}"
+
+
 def run_process(
     command: list[str],
     progress: ProgressCallback | None = None,

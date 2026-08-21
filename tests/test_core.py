@@ -4,8 +4,8 @@ import tempfile
 import unittest
 
 from taatik.core import (
-    TranscriptionError, conversion_command, parse_progress, transcription_command,
-    output_file, transcribe, unique_output_base, validate_input,
+    TranscriptionError, conversion_command, format_duration, parse_duration, parse_progress,
+    transcription_command, output_file, transcribe, unique_output_base, validate_input,
 )
 
 
@@ -29,6 +29,16 @@ class CoreTests(unittest.TestCase):
     def test_parse_progress(self):
         self.assertEqual(parse_progress("whisper_print_progress: progress = 42%"), 42)
         self.assertIsNone(parse_progress("noise"))
+
+    def test_parse_duration_reads_ffmpeg_summary(self):
+        line = "  Duration: 00:58:24.20, start: 0.000000, bitrate: 128 kb/s"
+        self.assertAlmostEqual(parse_duration(line), 3504.2, places=1)
+        self.assertIsNone(parse_duration("no duration here"))
+
+    def test_format_duration(self):
+        self.assertEqual(format_duration(75), "1:15")
+        self.assertEqual(format_duration(3504), "58:24")
+        self.assertEqual(format_duration(3661), "1:01:01")
 
     def test_output_names_do_not_overwrite_existing_files(self):
         with tempfile.TemporaryDirectory() as directory:

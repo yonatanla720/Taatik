@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_is_ready, model_path, whisper_engines
+from .core import format_duration, media_duration
 from .icon import icon_png
 from .workers import ModelDownloadWorker, TranscriptionWorker
 
@@ -156,12 +157,23 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Unsupported file", "Please choose a common audio or video file.")
             return
         self.source = path
-        self.file_label.setText(f"Selected: {path.name}")
+        self.file_label.setText(f"Selected: {path.name}  ({self._describe(path)})")
         if self.output_dir is None:
             remembered = self.settings.value("output_dir", "")
             self.output_dir = Path(remembered) if remembered else path.parent
             self.folder_label.setText(f"Output folder: {self.output_dir}")
         self.start_button.setEnabled(True)
+
+    def _describe(self, path: Path) -> str:
+        try:
+            size_mb = path.stat().st_size / (1024 * 1024)
+        except OSError:
+            return "unavailable"
+        details = f"{size_mb:.1f} MB"
+        duration = media_duration(bundled_tool("ffmpeg"), path)
+        if duration:
+            details = f"{format_duration(duration)}, {details}"
+        return details
 
     def choose_output(self) -> None:
         initial = str(self.output_dir or Path.home())
