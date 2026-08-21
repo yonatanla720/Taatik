@@ -4,14 +4,15 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QElapsedTimer, QSettings, QThread, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QElapsedTimer, QRectF, QSettings, QThread, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
-    QCloseEvent, QDesktopServices, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QIcon,
-    QKeySequence, QPixmap, QShortcut,
+    QColor, QCloseEvent, QDesktopServices, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QIcon,
+    QKeySequence, QPainter, QPixmap, QShortcut,
 )
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QProgressBar, QPushButton, QSpinBox, QTextBrowser, QVBoxLayout, QWidget,
+    QMainWindow, QMessageBox, QProgressBar, QPushButton, QSpinBox, QTextBrowser,
+    QVBoxLayout, QWidget,
 )
 
 from . import __version__
@@ -25,45 +26,67 @@ from .workers import ModelDownloadWorker, TranscriptionWorker
 
 
 _STYLESHEET = """
-    QWidget {{ background: {bg}; color: {text}; font: 15px 'Segoe UI'; }}
-    #heading {{ font-size: 28px; font-weight: 650; color: {heading}; }}
-    #dropArea {{ border: 2px dashed {drop_border}; border-radius: 12px; background: {drop_bg}; }}
-    #dropArea[dragActive="true"] {{ border-color: {primary}; background: {drop_active_bg}; }}
-    #dropTitle {{ font-size: 18px; font-weight: 600; }}
-    QPushButton {{ padding: 9px 16px; min-height: 20px; border: 1px solid {btn_border};
-                   border-radius: 7px; background: {btn_bg}; color: {text}; }}
-    QPushButton:hover {{ background: {btn_hover}; }}
-    QPushButton:disabled {{ color: {btn_disabled_fg}; background: {btn_disabled_bg}; }}
-    #primary {{ padding: 13px; background: {primary}; color: white; border: 0; font-weight: 650; }}
-    #primary:hover {{ background: {primary_hover}; }}
-    #danger {{ padding: 13px; background: {btn_bg}; color: {danger_fg};
-               border: 1px solid {danger_border}; font-weight: 650; }}
-    #danger:hover {{ background: {danger_hover}; }}
-    #danger:disabled {{ color: {btn_disabled_fg}; background: {btn_disabled_bg}; border-color: {btn_border}; }}
-    #status {{ color: {muted}; }}
-    QProgressBar {{ height: 16px; border: 1px solid {pb_border}; border-radius: 6px;
-                    background: {pb_bg}; text-align: center; }}
-    QProgressBar::chunk {{ background: {accent}; border-radius: 5px; }}
+    QWidget {{ background: {bg}; color: {text}; font: 14px 'Segoe UI'; }}
+    QLabel, QCheckBox {{ background: transparent; }}
+    #appTitle {{ font-size: 23px; font-weight: 700; color: {heading}; }}
+    #tagline {{ font-size: 13px; color: {muted}; }}
+    #sectionLabel {{ font-size: 12px; font-weight: 700; color: {muted}; letter-spacing: 1px; }}
+    #hint {{ font-size: 13px; color: {muted}; }}
+
+    #dropArea {{ border: 2px dashed {border}; border-radius: 18px; background: {surface}; }}
+    #dropArea[dragActive="true"] {{ border: 2px solid {accent}; background: {accent_soft}; }}
+    #dropTitle {{ font-size: 17px; font-weight: 600; color: {text}; }}
+    #dropSub {{ font-size: 13px; color: {muted}; }}
+
+    #card {{ background: {surface}; border: 1px solid {border}; border-radius: 14px; }}
+    #divider {{ background: {border}; max-height: 1px; min-height: 1px; border: 0; }}
+
+    QPushButton {{ padding: 8px 16px; min-height: 20px; border: 1px solid {border};
+                   border-radius: 9px; background: {surface}; color: {text}; font-weight: 600; }}
+    QPushButton:hover {{ background: {chip_bg}; }}
+    QPushButton:disabled {{ color: {disabled_fg}; background: {disabled_bg}; border-color: {border}; }}
+    #primary {{ padding: 14px 20px; background: {accent}; color: #ffffff; border: 0;
+                border-radius: 12px; font-size: 15px; font-weight: 700; }}
+    #primary:hover {{ background: {accent_hover}; }}
+    #primary:disabled {{ background: {disabled_bg}; color: {disabled_fg}; }}
+    #danger {{ padding: 14px 20px; background: {danger_soft}; color: {danger_fg};
+               border: 1px solid {danger_border}; border-radius: 12px; font-size: 15px; font-weight: 700; }}
+    #danger:hover {{ background: {danger_border}; }}
+    #danger:disabled {{ color: {disabled_fg}; background: {disabled_bg}; border-color: {border}; }}
+
+    #status {{ color: {muted}; font-size: 13px; }}
+    QProgressBar {{ min-height: 8px; max-height: 8px; border: 0; border-radius: 4px;
+                    background: {chip_bg}; }}
+    QProgressBar::chunk {{ background: {accent}; border-radius: 4px; }}
+
+    QCheckBox {{ font-size: 14px; spacing: 9px; }}
+    QCheckBox::indicator {{ width: 18px; height: 18px; border: 1.5px solid {border};
+                            border-radius: 5px; background: {surface}; }}
+    QCheckBox::indicator:checked {{ background: {accent}; border-color: {accent}; }}
+    QCheckBox::indicator:disabled {{ background: {disabled_bg}; border-color: {border}; }}
+    QSpinBox {{ padding: 5px 8px; border: 1px solid {border}; border-radius: 8px;
+                background: {surface}; color: {text}; min-height: 22px; }}
+    QSpinBox:disabled {{ color: {disabled_fg}; background: {disabled_bg}; }}
+
+    QMenuBar {{ background: {bg}; color: {text}; }}
+    QMenuBar::item:selected {{ background: {chip_bg}; border-radius: 5px; }}
+    QMenu {{ background: {surface}; color: {text}; border: 1px solid {border}; padding: 4px; }}
+    QMenu::item {{ padding: 6px 22px; border-radius: 6px; }}
+    QMenu::item:selected {{ background: {accent_soft}; }}
 """
 
 _LIGHT = {
-    "bg": "#f7f7f5", "text": "#202421", "heading": "#173a2c", "muted": "#4a5750",
-    "drop_border": "#8aa598", "drop_bg": "#ffffff", "drop_active_bg": "#eaf3ee", "accent": "#4c9a78",
-    "btn_border": "#aab5af", "btn_bg": "#ffffff", "btn_hover": "#eef3f0",
-    "btn_disabled_fg": "#8b918e", "btn_disabled_bg": "#e5e7e5",
-    "primary": "#176b4b", "primary_hover": "#12583d",
-    "danger_fg": "#a4322a", "danger_border": "#d8a29d", "danger_hover": "#fbeceb",
-    "pb_border": "#c6cec9", "pb_bg": "#ffffff",
+    "bg": "#f4f6f4", "surface": "#ffffff", "text": "#17211c", "muted": "#61706a",
+    "heading": "#10231a", "border": "#e2e7e3", "accent": "#12855a", "accent_hover": "#0f6f4b",
+    "accent_soft": "#e8f3ed", "danger_fg": "#bf3a2d", "danger_soft": "#fbeae8",
+    "danger_border": "#edcbc6", "chip_bg": "#eef2ef", "disabled_fg": "#9aa5a0", "disabled_bg": "#eceeec",
 }
 
 _DARK = {
-    "bg": "#1e211f", "text": "#e6e9e6", "heading": "#7fc9a6", "muted": "#a7b0ab",
-    "drop_border": "#4a5a51", "drop_bg": "#262a28", "drop_active_bg": "#24312b", "accent": "#4c9a78",
-    "btn_border": "#47514c", "btn_bg": "#2a2f2c", "btn_hover": "#333a36",
-    "btn_disabled_fg": "#6b726e", "btn_disabled_bg": "#242725",
-    "primary": "#2f9068", "primary_hover": "#35a074",
-    "danger_fg": "#e6857b", "danger_border": "#6e4a46", "danger_hover": "#3a2b29",
-    "pb_border": "#3a423d", "pb_bg": "#242725",
+    "bg": "#15181a", "surface": "#1e2325", "text": "#e7ecea", "muted": "#97a29d",
+    "heading": "#d9e8df", "border": "#2c3331", "accent": "#2ea877", "accent_hover": "#38b785",
+    "accent_soft": "#1c332a", "danger_fg": "#e8837a", "danger_soft": "#2e2320",
+    "danger_border": "#4e3733", "chip_bg": "#262c2a", "disabled_fg": "#6b746f", "disabled_bg": "#232927",
 }
 
 
@@ -76,6 +99,38 @@ def app_icon() -> QIcon:
     return icon
 
 
+def logo_pixmap(size: int) -> QPixmap:
+    pixmap = QPixmap()
+    pixmap.loadFromData(icon_png(size * 2), "PNG")
+    pixmap.setDevicePixelRatio(2.0)
+    return pixmap
+
+
+def waveform_glyph(color: str, size: int = 52) -> QPixmap:
+    """A small monochrome waveform mark for the drop zone, tinted to the theme."""
+    scale = 2
+    pixmap = QPixmap(size * scale, size * scale)
+    pixmap.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(pixmap)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(color))
+    dim = size * scale
+    heights = (0.36, 0.62, 0.86, 1.0, 0.72, 0.5, 0.3)
+    bar = dim * 0.072
+    gap = dim * 0.056
+    span = len(heights) * bar + (len(heights) - 1) * gap
+    x = (dim - span) / 2
+    center = dim / 2
+    for h in heights:
+        half = dim * 0.42 * h
+        painter.drawRoundedRect(QRectF(x, center - half, bar, half * 2), bar / 2, bar / 2)
+        x += bar + gap
+    painter.end()
+    pixmap.setDevicePixelRatio(scale)
+    return pixmap
+
+
 class DropArea(QFrame):
     file_selected = Signal(object)
 
@@ -83,29 +138,37 @@ class DropArea(QFrame):
         super().__init__()
         self.setAcceptDrops(True)
         self.setObjectName("dropArea")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Drop a file here, or click to browse (Ctrl+O)")
         self.setAccessibleName("File drop area")
-        self.setAccessibleDescription("Drop an audio or video file here, or use the Choose file button.")
+        self.setAccessibleDescription("Drop an audio or video file here, or click to browse.")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(30, 42, 30, 42)
-        title = QLabel("Drop an audio or video file here")
+        layout.setContentsMargins(30, 40, 30, 40)
+        layout.setSpacing(4)
+        self.glyph = QLabel()
+        self.glyph.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title = QLabel("Drop audio or video here")
         title.setObjectName("dropTitle")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle = QLabel("or choose a file from your computer")
+        subtitle = QLabel("or click to browse")
+        subtitle.setObjectName("dropSub")
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        choose = QPushButton("Choose file")
-        choose.clicked.connect(self.choose_file)
-        choose.setMinimumWidth(150)
-        choose.setToolTip("Choose a recording (Ctrl+O)")
-        choose.setAccessibleName("Choose file")
+        layout.addWidget(self.glyph)
+        layout.addSpacing(10)
         layout.addWidget(title)
         layout.addWidget(subtitle)
-        layout.addSpacing(8)
-        layout.addWidget(choose, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    def set_accent(self, color: str) -> None:
+        self.glyph.setPixmap(waveform_glyph(color))
 
     def choose_file(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Choose audio or video", "", "Audio and video files (*)")
         if path:
             self.file_selected.emit(Path(path))
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self.isEnabled():
+            self.choose_file()
 
     def _set_drag_active(self, active: bool) -> None:
         if self.property("dragActive") == active:
@@ -138,8 +201,8 @@ class MainWindow(QMainWindow):
         self.is_busy = False
         self.settings = QSettings("Taatik", "Taatik")
         self.setWindowTitle("Taatik — Hebrew Transcription")
-        self.resize(680, 560)
-        self.setMinimumSize(580, 500)
+        self.resize(720, 660)
+        self.setMinimumSize(620, 600)
         self._build_ui()
         geometry = self.settings.value("window_geometry")
         if geometry is not None:
@@ -148,24 +211,51 @@ class MainWindow(QMainWindow):
     def _build_ui(self) -> None:
         root = QWidget()
         layout = QVBoxLayout(root)
-        layout.setContentsMargins(42, 32, 42, 32)
+        layout.setContentsMargins(28, 22, 28, 24)
         layout.setSpacing(16)
-        heading = QLabel("Hebrew transcription")
-        heading.setObjectName("heading")
-        intro = QLabel("Turn a recording into text and subtitles. Everything stays on this computer.")
-        intro.setWordWrap(True)
+
+        # Header: logo + wordmark + tagline.
+        self._logo = QLabel()
+        self._logo.setPixmap(logo_pixmap(38))
+        title = QLabel("Taatik")
+        title.setObjectName("appTitle")
+        tagline = QLabel("Private Hebrew transcription — audio & video to text, on your device.")
+        tagline.setObjectName("tagline")
+        tagline.setWordWrap(True)
+        titles = QVBoxLayout()
+        titles.setSpacing(1)
+        titles.addWidget(title)
+        titles.addWidget(tagline)
+        header = QHBoxLayout()
+        header.setSpacing(12)
+        header.addWidget(self._logo, 0, Qt.AlignmentFlag.AlignTop)
+        header.addLayout(titles, 1)
+        layout.addLayout(header)
+
+        # Hero drop zone.
         self.drop = DropArea()
         self.drop.file_selected.connect(self.select_source)
+        layout.addWidget(self.drop)
         self.file_label = QLabel("No file selected")
+        self.file_label.setObjectName("hint")
         self.file_label.setWordWrap(True)
-        folder_row = QHBoxLayout()
+        layout.addWidget(self.file_label)
+
+        # Settings card: output folder + speaker separation.
+        card = QFrame()
+        card.setObjectName("card")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(12)
         self.folder_label = QLabel("Output folder: not selected")
         self.folder_label.setWordWrap(True)
         self.folder_button = QPushButton("Choose folder")
         self.folder_button.clicked.connect(self.choose_output)
+        folder_row = QHBoxLayout()
         folder_row.addWidget(self.folder_label, 1)
         folder_row.addWidget(self.folder_button)
-        diar_row = QHBoxLayout()
+        divider = QFrame()
+        divider.setObjectName("divider")
         self.diar_check = QCheckBox("Separate speakers")
         self.speaker_count = QSpinBox()
         self.speaker_count.setRange(0, 10)
@@ -179,15 +269,26 @@ class MainWindow(QMainWindow):
         else:
             self.diar_check.setEnabled(False)
             self.diar_check.setToolTip("Speaker separation is unavailable in this build.")
+        diar_row = QHBoxLayout()
         diar_row.addWidget(self.diar_check)
         diar_row.addStretch(1)
         diar_row.addWidget(self.speaker_count)
         self.output_preview = QLabel("")
-        self.output_preview.setObjectName("status")
+        self.output_preview.setObjectName("hint")
         self.output_preview.setWordWrap(True)
+        card_layout.addLayout(folder_row)
+        card_layout.addWidget(divider)
+        card_layout.addLayout(diar_row)
+        card_layout.addWidget(self.output_preview)
+        layout.addWidget(card)
+
+        layout.addStretch(1)
+
+        # Progress + status, then the primary action.
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
+        self.progress.setTextVisible(False)
         self.status = QLabel("Ready")
         self.status.setObjectName("status")
         self.elapsed_label = QLabel("")
@@ -208,13 +309,6 @@ class MainWindow(QMainWindow):
         self.stop_button.setObjectName("danger")
         self.stop_button.clicked.connect(self.cancel)
         self.stop_button.hide()
-        layout.addWidget(heading)
-        layout.addWidget(intro)
-        layout.addWidget(self.drop)
-        layout.addWidget(self.file_label)
-        layout.addLayout(folder_row)
-        layout.addLayout(diar_row)
-        layout.addWidget(self.output_preview)
         layout.addWidget(self.progress)
         layout.addLayout(status_row)
         layout.addWidget(self.start_button)
@@ -250,7 +344,6 @@ class MainWindow(QMainWindow):
 
     def _setup_accessibility(self) -> None:
         self.progress.setAccessibleName("Transcription progress")
-        self.progress.setTextVisible(True)
         self.status.setAccessibleName("Status")
         self.elapsed_label.setAccessibleName("Elapsed time")
         self.file_label.setAccessibleName("Selected file")
@@ -300,7 +393,9 @@ class MainWindow(QMainWindow):
     def _apply_theme(self) -> None:
         hints = QApplication.styleHints()
         scheme = hints.colorScheme() if hasattr(hints, "colorScheme") else Qt.ColorScheme.Light
-        self.setStyleSheet(_STYLESHEET.format(**(_DARK if scheme == Qt.ColorScheme.Dark else _LIGHT)))
+        palette = _DARK if scheme == Qt.ColorScheme.Dark else _LIGHT
+        self.setStyleSheet(_STYLESHEET.format(**palette))
+        self.drop.set_accent(palette["accent"])
 
     def select_source(self, path: Path) -> None:
         if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
