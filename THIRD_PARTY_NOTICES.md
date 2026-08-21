@@ -9,6 +9,20 @@ directory. Those files must remain with redistributed copies of the app.
 - **FFmpeg** — https://ffmpeg.org/ — built without GPL or non-free options and
   distributed under the GNU Lesser General Public License, version 2.1 or later.
 - **whisper.cpp / ggml** — https://github.com/ggml-org/whisper.cpp — MIT License.
+- **sherpa-onnx** — https://github.com/k2-fsa/sherpa-onnx — Apache License
+  2.0. Provides the offline speaker-diarization engine used for the optional
+  "Separate speakers" feature.
+- **ONNX Runtime** — https://github.com/microsoft/onnxruntime — MIT License.
+  Bundled with sherpa-onnx to run the diarization models on the CPU.
+- **pyannote speaker-segmentation 3.0 model** —
+  https://huggingface.co/pyannote/segmentation-3.0 — MIT License. Used, in its
+  ONNX form, to segment audio into speaker turns.
+- **3D-Speaker embedding model** — https://github.com/modelscope/3D-Speaker —
+  Apache License 2.0. Used, in its ONNX form, to cluster speaker turns.
+- **NumPy** — https://numpy.org/ — BSD 3-Clause License.
+- **libsndfile** (via the SoundFile package) — https://libsndfile.github.io/libsndfile/
+  — GNU Lesser General Public License, version 2.1 or later. Reads the prepared
+  audio for diarization. SoundFile itself is under the BSD 3-Clause License.
 - **NVIDIA CUDA runtime libraries** (Windows only) — cuBLAS, cuBLASLt, CUDA
   runtime, and NVRTC redistributable DLLs from the CUDA Toolkit, redistributed
   under the NVIDIA CUDA Toolkit End User License Agreement

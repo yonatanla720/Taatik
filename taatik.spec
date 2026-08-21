@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 import tomllib
 
+from PyInstaller.utils.hooks import collect_all
+
 root = Path(SPECPATH)
 app_version = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))["project"]["version"]
 vendor_bin = Path(os.environ.get("TAATIK_VENDOR_BIN", root / "vendor" / "bin"))
@@ -19,6 +21,19 @@ datas = [(str(root / "THIRD_PARTY_NOTICES.md"), ".")]
 if license_dir and license_dir.is_dir():
     datas.append((str(license_dir), "licenses"))
 
+# Bundle the ONNX speaker-diarization models.
+vendor_diar = root / "vendor" / "diarization"
+for model in vendor_diar.glob("*.onnx"):
+    datas.append((str(model), "diarization"))
+
+# Collect the diarization runtime packages (native ONNX runtime + libsndfile).
+diar_binaries, diar_hidden = [], []
+for pkg in ("sherpa_onnx", "soundfile"):
+    pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
+    datas += pkg_datas
+    diar_binaries += pkg_binaries
+    diar_hidden += pkg_hidden
+
 a = Analysis(
     [str(root / "taatik_launcher.py")],
     pathex=[str(root)],
@@ -30,9 +45,9 @@ a = Analysis(
         (str(path), "bin-cuda")
         for path in vendor_bin_cuda.glob("*")
         if path.is_file()
-    ],
+    ] + diar_binaries,
     datas=datas,
-    hiddenimports=[],
+    hiddenimports=diar_hidden,
     hookspath=[],
     excludes=[],
     noarchive=False,

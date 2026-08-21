@@ -18,6 +18,12 @@ Existing transcripts are never overwritten; Taatik adds `(2)`, `(3)`, and so
 on. Video is converted internally to mono, 16 kHz WAV audio before
 transcription. Hebrew is explicitly selected in whisper.cpp.
 
+Optionally, tick **Separate speakers** to label the transcript by speaker
+(`Speaker 1`, `Speaker 2`, …). You can set the number of speakers or leave it on
+**Auto**. Speaker separation runs locally with sherpa-onnx (ONNX, no network)
+and adds processing time. It is approximate — overlapping speech and similar
+voices reduce accuracy, and giving the speaker count usually helps.
+
 ## Privacy and storage
 
 - Audio/video and transcripts stay on the computer.

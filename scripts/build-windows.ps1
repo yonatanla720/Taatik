@@ -81,6 +81,23 @@ New-Item -ItemType Directory -Force -Path $BinCuda | Out-Null
 Copy-Item $CudaExe.FullName (Join-Path $BinCuda "whisper-cli.exe") -Force
 Copy-Item (Join-Path $CudaExe.DirectoryName "*.dll") $BinCuda -Force
 
+# Speaker diarization models (ONNX): pyannote segmentation + 3D-Speaker embedding.
+$DiarDir = Join-Path $Vendor "diarization"
+New-Item -ItemType Directory -Force -Path $DiarDir | Out-Null
+$SegBz2 = Join-Path $Downloads "sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+$SegUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+$EmbOnnx = Join-Path $DiarDir "embedding.onnx"
+$EmbUrl = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+if (-not (Test-Path $SegBz2)) { Get-RemoteFile $SegUrl $SegBz2 }
+if (-not (Test-Path $EmbOnnx)) { Get-RemoteFile $EmbUrl $EmbOnnx }
+$SegExtract = Join-Path $Vendor "segmentation"
+Remove-Item $SegExtract -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $SegExtract | Out-Null
+tar -xjf $SegBz2 -C $SegExtract
+$SegModel = Get-ChildItem $SegExtract -Recurse -Filter "model.onnx" | Select-Object -First 1
+if (-not $SegModel) { throw "Could not find the segmentation model in the downloaded archive." }
+Copy-Item $SegModel.FullName (Join-Path $DiarDir "segmentation.onnx") -Force
+
 Set-Location $ProjectRoot
 if (-not (Test-Path ".venv")) { py -3.11 -m venv .venv }
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip
