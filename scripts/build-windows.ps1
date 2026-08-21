@@ -107,8 +107,10 @@ $WinIcon = Join-Path $ProjectRoot "build\windows-icon\Taatik.ico"
 & .\.venv\Scripts\python.exe scripts\create-windows-icon.py $WinIcon
 $env:TAATIK_WIN_ICON = $WinIcon
 & .\.venv\Scripts\pyinstaller.exe --noconfirm --clean taatik.spec
-& .\dist\Taatik\Taatik.exe --self-test
-if ($LASTEXITCODE -ne 0) { throw "The packaged app failed its bundled-component self-check." }
+# Taatik.exe is a windowed app, so & does not wait for it or capture its exit
+# code; run it via Start-Process -Wait so the self-check actually gates the build.
+$SelfTest = Start-Process ".\dist\Taatik\Taatik.exe" -ArgumentList "--self-test" -Wait -PassThru -NoNewWindow
+if ($SelfTest.ExitCode -ne 0) { throw "The packaged app failed its bundled-component self-check." }
 
 $IsccPath = (Get-Command "ISCC.exe" -ErrorAction SilentlyContinue).Source
 if (-not $IsccPath) {
