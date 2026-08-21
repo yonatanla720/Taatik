@@ -134,6 +134,9 @@ class MainWindow(QMainWindow):
         self.resize(680, 560)
         self.setMinimumSize(580, 500)
         self._build_ui()
+        geometry = self.settings.value("window_geometry")
+        if geometry is not None:
+            self.restoreGeometry(geometry)
 
     def _build_ui(self) -> None:
         root = QWidget()
@@ -366,6 +369,7 @@ class MainWindow(QMainWindow):
             if worker is not None:
                 worker.cancel()
             self._finish_thread()
+        self.settings.setValue("window_geometry", self.saveGeometry())
         event.accept()
 
 
