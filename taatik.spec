@@ -22,7 +22,7 @@ if license_dir and license_dir.is_dir():
     datas.append((str(license_dir), "licenses"))
 
 # Bundle the ONNX speaker-diarization models.
-vendor_diar = root / "vendor" / "diarization"
+vendor_diar = Path(os.environ.get("TAATIK_VENDOR_DIAR", root / "vendor" / "diarization"))
 for model in vendor_diar.glob("*.onnx"):
     datas.append((str(model), "diarization"))
 

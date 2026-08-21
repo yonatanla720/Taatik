@@ -68,7 +68,7 @@ NATIVE_BUILD="$PROJECT_ROOT/build/macos-native-$MAC_ARCH"
 PACKAGE_BUILD="$PROJECT_ROOT/build/macos-pyinstaller-$MAC_ARCH"
 LICENSES="$VENDOR_ROOT/licenses"
 BIN="$VENDOR_ROOT/bin"
-ICON="$PROJECT_ROOT/build/macos-icon/Taatik-placeholder.png"
+ICON="$PROJECT_ROOT/build/macos-icon/Taatik.png"
 APP="$PROJECT_ROOT/dist/Taatik.app"
 DMG="$PROJECT_ROOT/release/Taatik-$APP_VERSION-macos-$MAC_ARCH.dmg"
 
@@ -201,6 +201,17 @@ cp "$APACHE2_LICENSE" "$LICENSES/Model-Apache-2.0.txt"
 cp "$APACHE2_LICENSE" "$LICENSES/OpenSSL-Apache-2.0.txt"
 cp "$FFMPEG_SOURCE/COPYING.LGPLv2.1" "$LICENSES/GNU-gettext-LGPL-2.1.txt"
 cp "$XZ_LICENSE" "$LICENSES/XZ-Utils-COPYING.txt"
+
+# Speaker diarization models (ONNX): pyannote segmentation + 3D-Speaker embedding.
+DIAR="$VENDOR_ROOT/diarization"
+mkdir -p "$DIAR"
+SEG_ARCHIVE="$DOWNLOADS/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+download "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2" "$SEG_ARCHIVE"
+download "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx" "$DIAR/embedding.onnx"
+rm -rf "$DOWNLOADS/sherpa-onnx-pyannote-segmentation-3-0"
+tar -xjf "$SEG_ARCHIVE" -C "$DOWNLOADS"
+cp "$DOWNLOADS/sherpa-onnx-pyannote-segmentation-3-0/model.onnx" "$DIAR/segmentation.onnx"
+
 "$PYTHON" "$PROJECT_ROOT/scripts/create-macos-icon.py" "$ICON"
 
 rm -rf "$PACKAGE_BUILD" "$APP"
@@ -214,6 +225,7 @@ if [[ -n "$SIGN_IDENTITY" ]]; then
     PYINSTALLER_ARGS+=(--codesign-identity "$SIGN_IDENTITY")
 fi
 TAATIK_VENDOR_BIN="$BIN" \
+TAATIK_VENDOR_DIAR="$DIAR" \
 TAATIK_LICENSE_DIR="$LICENSES" \
 TAATIK_MAC_ICON="$ICON" \
 "$VENV/bin/pyinstaller" "${PYINSTALLER_ARGS[@]}" "$PROJECT_ROOT/taatik.spec"
