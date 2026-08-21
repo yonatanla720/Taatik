@@ -6,14 +6,48 @@ $Downloads = Join-Path $Vendor "downloads"
 
 New-Item -ItemType Directory -Force -Path $Bin, $Downloads | Out-Null
 
+function Get-RemoteFile {
+    param([Parameter(Mandatory)][string]$Url, [Parameter(Mandatory)][string]$OutFile)
+    $name = Split-Path $OutFile -Leaf
+    $req = [System.Net.HttpWebRequest]::Create($Url)
+    $req.UserAgent = "Taatik-Build"
+    $resp = $req.GetResponse()
+    $total = $resp.ContentLength
+    $in = $resp.GetResponseStream()
+    $out = [System.IO.File]::Create($OutFile)
+    try {
+        $buffer = New-Object byte[] (1MB)
+        $done = 0L
+        $lastReport = 0L
+        while (($read = $in.Read($buffer, 0, $buffer.Length)) -gt 0) {
+            $out.Write($buffer, 0, $read)
+            $done += $read
+            if (($done - $lastReport) -ge 1MB -or $done -eq $total) {
+                $lastReport = $done
+                if ($total -gt 0) {
+                    $pct = [int]($done / $total * 100)
+                    Write-Progress -Activity "Downloading $name" `
+                        -Status ("{0:N1} / {1:N1} MB" -f ($done / 1MB), ($total / 1MB)) `
+                        -PercentComplete $pct
+                } else {
+                    Write-Progress -Activity "Downloading $name" -Status ("{0:N1} MB" -f ($done / 1MB))
+                }
+            }
+        }
+        Write-Progress -Activity "Downloading $name" -Completed
+    } finally {
+        $out.Dispose(); $in.Dispose(); $resp.Dispose()
+    }
+}
+
 $WhisperVersion = "v1.9.1"
 $WhisperZip = Join-Path $Downloads "whisper-bin-x64.zip"
 $WhisperUrl = "https://github.com/ggml-org/whisper.cpp/releases/download/$WhisperVersion/whisper-bin-x64.zip"
 $FfmpegZip = Join-Path $Downloads "ffmpeg-release-essentials.zip"
 $FfmpegUrl = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 
-if (-not (Test-Path $WhisperZip)) { Invoke-WebRequest $WhisperUrl -OutFile $WhisperZip }
-if (-not (Test-Path $FfmpegZip)) { Invoke-WebRequest $FfmpegUrl -OutFile $FfmpegZip }
+if (-not (Test-Path $WhisperZip)) { Get-RemoteFile $WhisperUrl $WhisperZip }
+if (-not (Test-Path $FfmpegZip)) { Get-RemoteFile $FfmpegUrl $FfmpegZip }
 
 $WhisperExtract = Join-Path $Vendor "whisper"
 $FfmpegExtract = Join-Path $Vendor "ffmpeg"
@@ -38,13 +72,13 @@ if (-not (Test-Path ".venv")) { py -3.11 -m venv .venv }
 & .\dist\Taatik\Taatik.exe --self-test
 if ($LASTEXITCODE -ne 0) { throw "The packaged app failed its bundled-component self-check." }
 
-$Iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
-if (-not $Iscc) {
+$IsccPath = (Get-Command "ISCC.exe" -ErrorAction SilentlyContinue).Source
+if (-not $IsccPath) {
     $DefaultIscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-    if (Test-Path $DefaultIscc) { $Iscc = Get-Item $DefaultIscc }
+    if (Test-Path $DefaultIscc) { $IsccPath = $DefaultIscc }
 }
-if (-not $Iscc) {
+if (-not $IsccPath) {
     throw "The app was built in dist\Taatik, but Inno Setup 6 is required to create the installer."
 }
-& $Iscc.Source (Join-Path $ProjectRoot "installer\Taatik.iss")
+& $IsccPath (Join-Path $ProjectRoot "installer\Taatik.iss")
 Write-Host "Installer created in release\"
