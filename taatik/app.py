@@ -80,6 +80,8 @@ class DropArea(QFrame):
         super().__init__()
         self.setAcceptDrops(True)
         self.setObjectName("dropArea")
+        self.setAccessibleName("File drop area")
+        self.setAccessibleDescription("Drop an audio or video file here, or use the Choose file button.")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(30, 42, 30, 42)
         title = QLabel("Drop an audio or video file here")
@@ -91,6 +93,7 @@ class DropArea(QFrame):
         choose.clicked.connect(self.choose_file)
         choose.setMinimumWidth(150)
         choose.setToolTip("Choose a recording (Ctrl+O)")
+        choose.setAccessibleName("Choose file")
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addSpacing(8)
@@ -196,6 +199,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.start_button)
         layout.addWidget(self.stop_button)
         self.setCentralWidget(root)
+        self._setup_accessibility()
         self._build_menu()
         self._apply_theme()
         hints = QApplication.styleHints()
@@ -222,6 +226,18 @@ class MainWindow(QMainWindow):
     def _shortcut_stop(self) -> None:
         if self.is_busy and self.stop_button.isEnabled():
             self.cancel()
+
+    def _setup_accessibility(self) -> None:
+        self.progress.setAccessibleName("Transcription progress")
+        self.progress.setTextVisible(True)
+        self.status.setAccessibleName("Status")
+        self.elapsed_label.setAccessibleName("Elapsed time")
+        self.file_label.setAccessibleName("Selected file")
+        self.output_preview.setAccessibleName("Output files")
+        self.folder_button.setAccessibleName("Choose output folder")
+        self.start_button.setAccessibleName("Create transcript")
+        self.stop_button.setAccessibleName("Stop")
+        self.setTabOrder(self.folder_button, self.start_button)
 
     def _build_menu(self) -> None:
         help_menu = self.menuBar().addMenu("&Help")
