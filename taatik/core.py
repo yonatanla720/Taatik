@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Callable
@@ -126,14 +127,23 @@ def transcribe(
     if is_cancelled and is_cancelled():
         raise TranscriptionCancelled()
     base = unique_output_base(source, output_dir)
+    # whisper.cpp on Windows writes output through narrow fopen and cannot
+    # create files at non-ASCII paths (e.g. Hebrew recording names), silently
+    # producing nothing while still exiting zero. Write to an ASCII path inside
+    # the temp directory, then move the results to the real destination with
+    # Python, which handles Unicode names correctly.
+    work_base = temporary_wav.parent / "transcript"
     progress(15, "Transcribing in Hebrew…")
     run_process(
-        transcription_command(whisper, model, temporary_wav, base),
+        transcription_command(whisper, model, temporary_wav, work_base),
         lambda value, text: progress(15 + int(value * 0.84), text),
         on_start=on_start, is_cancelled=is_cancelled,
     )
-    txt, srt = output_file(base, ".txt"), output_file(base, ".srt")
-    if not txt.is_file() or not srt.is_file():
+    work_txt, work_srt = output_file(work_base, ".txt"), output_file(work_base, ".srt")
+    if not work_txt.is_file() or not work_srt.is_file():
         raise TranscriptionError("Transcription finished, but the output files were not created.")
+    txt, srt = output_file(base, ".txt"), output_file(base, ".srt")
+    shutil.move(str(work_txt), str(txt))
+    shutil.move(str(work_srt), str(srt))
     progress(100, "Done")
     return txt, srt
