@@ -10,10 +10,11 @@ from PySide6.QtGui import (
     QKeySequence, QPixmap, QShortcut,
 )
 from PySide6.QtWidgets import (
-    QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
-    QProgressBar, QPushButton, QVBoxLayout, QWidget,
+    QApplication, QDialog, QDialogButtonBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
+    QMainWindow, QMessageBox, QProgressBar, QPushButton, QTextBrowser, QVBoxLayout, QWidget,
 )
 
+from . import __version__
 from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_is_ready, model_path, whisper_engines
 from .core import format_duration, media_duration, output_file, unique_output_base
 from .icon import icon_png
@@ -195,6 +196,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.start_button)
         layout.addWidget(self.stop_button)
         self.setCentralWidget(root)
+        self._build_menu()
         self._apply_theme()
         hints = QApplication.styleHints()
         if hasattr(hints, "colorSchemeChanged"):
@@ -220,6 +222,43 @@ class MainWindow(QMainWindow):
     def _shortcut_stop(self) -> None:
         if self.is_busy and self.stop_button.isEnabled():
             self.cancel()
+
+    def _build_menu(self) -> None:
+        help_menu = self.menuBar().addMenu("&Help")
+        help_menu.addAction("&About Taatik", self._show_about)
+        help_menu.addAction("&Third-party notices", self._show_notices)
+
+    def _show_about(self) -> None:
+        QMessageBox.about(
+            self, "About Taatik",
+            f"<h3>Taatik {__version__}</h3>"
+            "<p>Turn Hebrew audio or video into text and subtitles, entirely on "
+            "your computer.</p>"
+            "<p>Recordings and transcripts are never uploaded. Transcription uses "
+            "whisper.cpp — GPU-accelerated on supported hardware — and FFmpeg.</p>"
+            "<p>See <b>Help → Third-party notices</b> for licenses.</p>",
+        )
+
+    def _show_notices(self) -> None:
+        base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+        notices = base / "THIRD_PARTY_NOTICES.md"
+        try:
+            text = notices.read_text(encoding="utf-8")
+        except OSError:
+            text = "Third-party notices file was not found in this build."
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Third-party notices")
+        dialog.resize(560, 480)
+        browser = QTextBrowser(dialog)
+        browser.setOpenExternalLinks(True)
+        browser.setMarkdown(text)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        buttons.rejected.connect(dialog.reject)
+        buttons.accepted.connect(dialog.accept)
+        box = QVBoxLayout(dialog)
+        box.addWidget(browser)
+        box.addWidget(buttons)
+        dialog.exec()
 
     def _apply_theme(self) -> None:
         hints = QApplication.styleHints()
