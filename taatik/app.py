@@ -4,7 +4,7 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QThread, Qt, QUrl, Signal
+from PySide6.QtCore import QElapsedTimer, QSettings, QThread, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QCloseEvent, QDesktopServices, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QIcon, QPixmap,
 )
@@ -115,6 +115,16 @@ class MainWindow(QMainWindow):
         self.progress.setValue(0)
         self.status = QLabel("Ready")
         self.status.setObjectName("status")
+        self.elapsed_label = QLabel("")
+        self.elapsed_label.setObjectName("status")
+        self.elapsed_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        status_row = QHBoxLayout()
+        status_row.addWidget(self.status, 1)
+        status_row.addWidget(self.elapsed_label)
+        self._elapsed = QElapsedTimer()
+        self._tick = QTimer(self)
+        self._tick.setInterval(1000)
+        self._tick.timeout.connect(self._update_elapsed)
         self.start_button = QPushButton("Create transcript")
         self.start_button.setObjectName("primary")
         self.start_button.setEnabled(False)
@@ -129,7 +139,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.file_label)
         layout.addLayout(folder_row)
         layout.addWidget(self.progress)
-        layout.addWidget(self.status)
+        layout.addLayout(status_row)
         layout.addWidget(self.start_button)
         layout.addWidget(self.stop_button)
         self.setCentralWidget(root)
@@ -267,6 +277,9 @@ class MainWindow(QMainWindow):
             self.thread.deleteLater()
             self.thread = None
 
+    def _update_elapsed(self) -> None:
+        self.elapsed_label.setText(format_duration(self._elapsed.elapsed() / 1000))
+
     def _busy(self, busy: bool) -> None:
         self.is_busy = busy
         self.start_button.setVisible(not busy)
@@ -277,6 +290,11 @@ class MainWindow(QMainWindow):
         self.folder_button.setEnabled(not busy)
         if busy:
             self.progress.setValue(0)
+            self._elapsed.restart()
+            self._update_elapsed()
+            self._tick.start()
+        else:
+            self._tick.stop()
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.is_busy:
