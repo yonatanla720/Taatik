@@ -19,6 +19,49 @@ from .icon import icon_png
 from .workers import ModelDownloadWorker, TranscriptionWorker
 
 
+_STYLESHEET = """
+    QWidget {{ background: {bg}; color: {text}; font: 15px 'Segoe UI'; }}
+    #heading {{ font-size: 28px; font-weight: 650; color: {heading}; }}
+    #dropArea {{ border: 2px dashed {drop_border}; border-radius: 12px; background: {drop_bg}; }}
+    #dropArea[dragActive="true"] {{ border-color: {primary}; background: {drop_active_bg}; }}
+    #dropTitle {{ font-size: 18px; font-weight: 600; }}
+    QPushButton {{ padding: 9px 16px; min-height: 20px; border: 1px solid {btn_border};
+                   border-radius: 7px; background: {btn_bg}; color: {text}; }}
+    QPushButton:hover {{ background: {btn_hover}; }}
+    QPushButton:disabled {{ color: {btn_disabled_fg}; background: {btn_disabled_bg}; }}
+    #primary {{ padding: 13px; background: {primary}; color: white; border: 0; font-weight: 650; }}
+    #primary:hover {{ background: {primary_hover}; }}
+    #danger {{ padding: 13px; background: {btn_bg}; color: {danger_fg};
+               border: 1px solid {danger_border}; font-weight: 650; }}
+    #danger:hover {{ background: {danger_hover}; }}
+    #danger:disabled {{ color: {btn_disabled_fg}; background: {btn_disabled_bg}; border-color: {btn_border}; }}
+    #status {{ color: {muted}; }}
+    QProgressBar {{ height: 16px; border: 1px solid {pb_border}; border-radius: 6px;
+                    background: {pb_bg}; text-align: center; }}
+    QProgressBar::chunk {{ background: {accent}; border-radius: 5px; }}
+"""
+
+_LIGHT = {
+    "bg": "#f7f7f5", "text": "#202421", "heading": "#173a2c", "muted": "#4a5750",
+    "drop_border": "#8aa598", "drop_bg": "#ffffff", "drop_active_bg": "#eaf3ee", "accent": "#4c9a78",
+    "btn_border": "#aab5af", "btn_bg": "#ffffff", "btn_hover": "#eef3f0",
+    "btn_disabled_fg": "#8b918e", "btn_disabled_bg": "#e5e7e5",
+    "primary": "#176b4b", "primary_hover": "#12583d",
+    "danger_fg": "#a4322a", "danger_border": "#d8a29d", "danger_hover": "#fbeceb",
+    "pb_border": "#c6cec9", "pb_bg": "#ffffff",
+}
+
+_DARK = {
+    "bg": "#1e211f", "text": "#e6e9e6", "heading": "#7fc9a6", "muted": "#a7b0ab",
+    "drop_border": "#4a5a51", "drop_bg": "#262a28", "drop_active_bg": "#24312b", "accent": "#4c9a78",
+    "btn_border": "#47514c", "btn_bg": "#2a2f2c", "btn_hover": "#333a36",
+    "btn_disabled_fg": "#6b726e", "btn_disabled_bg": "#242725",
+    "primary": "#2f9068", "primary_hover": "#35a074",
+    "danger_fg": "#e6857b", "danger_border": "#6e4a46", "danger_hover": "#3a2b29",
+    "pb_border": "#3a423d", "pb_bg": "#242725",
+}
+
+
 def app_icon() -> QIcon:
     icon = QIcon()
     for size in (16, 32, 48, 64):
@@ -143,24 +186,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.start_button)
         layout.addWidget(self.stop_button)
         self.setCentralWidget(root)
-        self.setStyleSheet("""
-            QWidget { background: #f7f7f5; color: #202421; font: 15px 'Segoe UI'; }
-            #heading { font-size: 28px; font-weight: 650; color: #173a2c; }
-            #dropArea { border: 2px dashed #8aa598; border-radius: 12px; background: #ffffff; }
-            #dropArea[dragActive="true"] { border-color: #176b4b; background: #eaf3ee; }
-            #dropTitle { font-size: 18px; font-weight: 600; }
-            QPushButton { padding: 9px 16px; min-height: 20px; border: 1px solid #aab5af; border-radius: 7px; background: white; }
-            QPushButton:hover { background: #eef3f0; }
-            QPushButton:disabled { color: #8b918e; background: #e5e7e5; }
-            #primary { padding: 13px; background: #176b4b; color: white; border: 0; font-weight: 650; }
-            #primary:hover { background: #12583d; }
-            #danger { padding: 13px; background: white; color: #a4322a; border: 1px solid #d8a29d; font-weight: 650; }
-            #danger:hover { background: #fbeceb; }
-            #danger:disabled { color: #b6928f; background: #f0e6e5; border-color: #e2cecb; }
-            #status { color: #4a5750; }
-            QProgressBar { height: 16px; border: 1px solid #c6cec9; border-radius: 6px; background: white; text-align: center; }
-            QProgressBar::chunk { background: #4c9a78; border-radius: 5px; }
-        """)
+        self._apply_theme()
+        hints = QApplication.styleHints()
+        if hasattr(hints, "colorSchemeChanged"):
+            hints.colorSchemeChanged.connect(lambda _scheme: self._apply_theme())
+
+    def _apply_theme(self) -> None:
+        hints = QApplication.styleHints()
+        scheme = hints.colorScheme() if hasattr(hints, "colorScheme") else Qt.ColorScheme.Light
+        self.setStyleSheet(_STYLESHEET.format(**(_DARK if scheme == Qt.ColorScheme.Dark else _LIGHT)))
 
     def select_source(self, path: Path) -> None:
         if path.suffix.lower() not in SUPPORTED_EXTENSIONS:
