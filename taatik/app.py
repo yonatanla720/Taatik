@@ -5,14 +5,24 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QThread, Qt, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
 
 from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_is_ready, model_path
+from .icon import icon_png
 from .workers import ModelDownloadWorker, TranscriptionWorker
+
+
+def app_icon() -> QIcon:
+    icon = QIcon()
+    for size in (16, 32, 48, 64):
+        pixmap = QPixmap()
+        pixmap.loadFromData(icon_png(size), "PNG")
+        icon.addPixmap(pixmap)
+    return icon
 
 
 class DropArea(QFrame):
@@ -31,7 +41,7 @@ class DropArea(QFrame):
         subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         choose = QPushButton("Choose file")
         choose.clicked.connect(self.choose_file)
-        choose.setFixedWidth(150)
+        choose.setMinimumWidth(150)
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addSpacing(8)
@@ -107,7 +117,7 @@ class MainWindow(QMainWindow):
             #heading { font-size: 28px; font-weight: 650; color: #173a2c; }
             #dropArea { border: 2px dashed #8aa598; border-radius: 12px; background: #ffffff; }
             #dropTitle { font-size: 18px; font-weight: 600; }
-            QPushButton { padding: 9px 16px; border: 1px solid #aab5af; border-radius: 7px; background: white; }
+            QPushButton { padding: 9px 16px; min-height: 20px; border: 1px solid #aab5af; border-radius: 7px; background: white; }
             QPushButton:hover { background: #eef3f0; }
             QPushButton:disabled { color: #8b918e; background: #e5e7e5; }
             #primary { padding: 13px; background: #176b4b; color: white; border: 0; font-weight: 650; }
@@ -231,6 +241,7 @@ def main() -> int:
         os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     app = QApplication(sys.argv)
     app.setApplicationName("Taatik")
+    app.setWindowIcon(app_icon())
     window = MainWindow()
     window.show()
     return app.exec()

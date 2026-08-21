@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BUILD_SCRIPT = ROOT / "scripts" / "build-macos.sh"
 
 
+@unittest.skipIf(sys.platform == "win32", "shell script is not executable on Windows")
 class MacBuildInterfaceTests(unittest.TestCase):
     def test_build_script_documents_outputs_and_optional_signing(self):
         result = subprocess.run(

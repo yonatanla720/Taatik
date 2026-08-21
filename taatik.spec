@@ -11,6 +11,8 @@ license_dir_value = os.environ.get("TAATIK_LICENSE_DIR")
 license_dir = Path(license_dir_value) if license_dir_value else None
 icon_value = os.environ.get("TAATIK_MAC_ICON")
 icon_path = Path(icon_value) if icon_value else None
+win_icon_value = os.environ.get("TAATIK_WIN_ICON")
+win_icon_path = Path(win_icon_value) if win_icon_value else None
 
 datas = [(str(root / "THIRD_PARTY_NOTICES.md"), ".")]
 if license_dir and license_dir.is_dir():
@@ -34,6 +36,7 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz, a.scripts, [], exclude_binaries=True, name="Taatik", debug=False,
     bootloader_ignore_signals=False, strip=False, upx=sys.platform == "win32", console=False,
+    icon=str(win_icon_path) if win_icon_path and win_icon_path.is_file() else None,
 )
 coll = COLLECT(
     exe, a.binaries, a.datas, strip=False, upx=sys.platform == "win32", name="Taatik"

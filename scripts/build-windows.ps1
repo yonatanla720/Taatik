@@ -68,6 +68,9 @@ if (-not (Test-Path ".venv")) { py -3.11 -m venv .venv }
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip
 & .\.venv\Scripts\python.exe -m pip install ".[dev]"
 & .\.venv\Scripts\python.exe -m unittest discover -s tests -v
+$WinIcon = Join-Path $ProjectRoot "build\windows-icon\Taatik.ico"
+& .\.venv\Scripts\python.exe scripts\create-windows-icon.py $WinIcon
+$env:TAATIK_WIN_ICON = $WinIcon
 & .\.venv\Scripts\pyinstaller.exe --noconfirm --clean taatik.spec
 & .\dist\Taatik\Taatik.exe --self-test
 if ($LASTEXITCODE -ne 0) { throw "The packaged app failed its bundled-component self-check." }
