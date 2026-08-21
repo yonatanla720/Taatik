@@ -40,10 +40,11 @@ def diarize(
             pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(segmentation)),
         ),
         embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(embedding)),
-        clustering=sherpa_onnx.FastClusteringConfig(
-            num_clusters=num_speakers if num_speakers and num_speakers > 0 else -1,
-            threshold=_AUTO_THRESHOLD,
-        ),
+        # Always cluster in automatic mode. Forcing a fixed num_clusters makes
+        # sherpa-onnx collapse everything into one dominant speaker and peel off
+        # only tiny scraps for the rest. The requested speaker count is applied
+        # afterwards in label_transcript, by keeping the top-K speakers.
+        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=-1, threshold=_AUTO_THRESHOLD),
         min_duration_on=0.3,
         min_duration_off=0.5,
     )
