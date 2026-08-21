@@ -14,6 +14,10 @@ class TranscriptionError(RuntimeError):
     pass
 
 
+class TranscriptionCancelled(Exception):
+    """Raised when the user stops transcription before it finishes."""
+
+
 def validate_input(path: Path) -> None:
     if not path.is_file():
         raise TranscriptionError("The selected file no longer exists.")
@@ -58,7 +62,12 @@ def parse_progress(line: str) -> int | None:
     return min(100, int(match.group(1))) if match else None
 
 
-def run_process(command: list[str], progress: ProgressCallback | None = None) -> None:
+def run_process(
+    command: list[str],
+    progress: ProgressCallback | None = None,
+    on_start: Callable[[subprocess.Popen], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
+) -> None:
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
         process = subprocess.Popen(
@@ -67,6 +76,9 @@ def run_process(command: list[str], progress: ProgressCallback | None = None) ->
         )
     except OSError as exc:
         raise TranscriptionError(f"Could not start a required component: {exc}") from exc
+
+    if on_start:
+        on_start(process)
 
     tail: list[str] = []
     assert process.stdout is not None
@@ -79,7 +91,10 @@ def run_process(command: list[str], progress: ProgressCallback | None = None) ->
                 parsed = parse_progress(line)
                 if parsed is not None and progress:
                     progress(parsed, "Transcribing…")
-    if process.wait() != 0:
+    returncode = process.wait()
+    if is_cancelled and is_cancelled():
+        raise TranscriptionCancelled()
+    if returncode != 0:
         detail = "\n".join(tail) or "The component stopped unexpectedly."
         raise TranscriptionError(detail)
 
@@ -92,6 +107,8 @@ def transcribe(
     whisper: Path,
     temporary_wav: Path,
     progress: ProgressCallback,
+    on_start: Callable[[subprocess.Popen], None] | None = None,
+    is_cancelled: Callable[[], bool] | None = None,
 ) -> tuple[Path, Path]:
     validate_input(source)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -102,12 +119,18 @@ def transcribe(
         raise TranscriptionError("The Hebrew transcription model is not installed.")
 
     progress(5, "Preparing the audio…")
-    run_process(conversion_command(ffmpeg, source, temporary_wav))
+    run_process(
+        conversion_command(ffmpeg, source, temporary_wav),
+        on_start=on_start, is_cancelled=is_cancelled,
+    )
+    if is_cancelled and is_cancelled():
+        raise TranscriptionCancelled()
     base = unique_output_base(source, output_dir)
     progress(15, "Transcribing in Hebrew…")
     run_process(
         transcription_command(whisper, model, temporary_wav, base),
         lambda value, text: progress(15 + int(value * 0.84), text),
+        on_start=on_start, is_cancelled=is_cancelled,
     )
     txt, srt = output_file(base, ".txt"), output_file(base, ".srt")
     if not txt.is_file() or not srt.is_file():

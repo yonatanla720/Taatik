@@ -103,6 +103,10 @@ class MainWindow(QMainWindow):
         self.start_button.setObjectName("primary")
         self.start_button.setEnabled(False)
         self.start_button.clicked.connect(self.start)
+        self.stop_button = QPushButton("Stop")
+        self.stop_button.setObjectName("danger")
+        self.stop_button.clicked.connect(self.cancel)
+        self.stop_button.hide()
         layout.addWidget(heading)
         layout.addWidget(intro)
         layout.addWidget(self.drop)
@@ -111,6 +115,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.progress)
         layout.addWidget(self.status)
         layout.addWidget(self.start_button)
+        layout.addWidget(self.stop_button)
         self.setCentralWidget(root)
         self.setStyleSheet("""
             QWidget { background: #f7f7f5; color: #202421; font: 15px 'Segoe UI'; }
@@ -122,6 +127,9 @@ class MainWindow(QMainWindow):
             QPushButton:disabled { color: #8b918e; background: #e5e7e5; }
             #primary { padding: 13px; background: #176b4b; color: white; border: 0; font-weight: 650; }
             #primary:hover { background: #12583d; }
+            #danger { padding: 13px; background: white; color: #a4322a; border: 1px solid #d8a29d; font-weight: 650; }
+            #danger:hover { background: #fbeceb; }
+            #danger:disabled { color: #b6928f; background: #f0e6e5; border-color: #e2cecb; }
             #status { color: #4a5750; }
             QProgressBar { height: 16px; border: 1px solid #c6cec9; border-radius: 6px; background: white; text-align: center; }
             QProgressBar::chunk { background: #4c9a78; border-radius: 5px; }
@@ -182,8 +190,22 @@ class MainWindow(QMainWindow):
         worker.progress.connect(self._progress)
         worker.completed.connect(completed)
         worker.failed.connect(self._failed)
+        worker.cancelled.connect(self._cancelled)
         self.thread.worker = worker  # keep the worker alive
         self.thread.start()
+
+    def cancel(self) -> None:
+        worker = getattr(self.thread, "worker", None) if self.thread else None
+        if worker is not None:
+            self.stop_button.setEnabled(False)
+            self.status.setText("Stopping…")
+            worker.cancel()
+
+    def _cancelled(self) -> None:
+        self._finish_thread()
+        self._busy(False)
+        self.progress.setValue(0)
+        self.status.setText("Stopped. You can start again when ready.")
 
     def _progress(self, value: int, message: str) -> None:
         self.progress.setValue(value)
@@ -219,7 +241,10 @@ class MainWindow(QMainWindow):
 
     def _busy(self, busy: bool) -> None:
         self.is_busy = busy
+        self.start_button.setVisible(not busy)
         self.start_button.setEnabled(not busy and self.source is not None)
+        self.stop_button.setVisible(busy)
+        self.stop_button.setEnabled(busy)
         self.drop.setEnabled(not busy)
         self.folder_button.setEnabled(not busy)
         if busy:
@@ -227,12 +252,17 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.is_busy:
-            event.ignore()
-            QMessageBox.information(
-                self, "Taatik is still working",
-                "Please wait for the current download or transcription to finish before closing Taatik.",
+            answer = QMessageBox.question(
+                self, "Stop and quit?",
+                "Taatik is still working. Stop the current task and quit?",
             )
-            return
+            if answer != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+            worker = getattr(self.thread, "worker", None) if self.thread else None
+            if worker is not None:
+                worker.cancel()
+            self._finish_thread()
         event.accept()
 
 

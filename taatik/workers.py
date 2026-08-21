@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import ssl
+import subprocess
 import tempfile
+import threading
 import urllib.request
 from pathlib import Path
 
@@ -9,17 +11,22 @@ import certifi
 from PySide6.QtCore import QObject, Signal, Slot
 
 from .config import MIN_MODEL_BYTES, MODEL_URL
-from .core import transcribe
+from .core import TranscriptionCancelled, transcribe
 
 
 class ModelDownloadWorker(QObject):
     progress = Signal(int, str)
     completed = Signal(Path)
     failed = Signal(str)
+    cancelled = Signal()
 
     def __init__(self, destination: Path):
         super().__init__()
         self.destination = destination
+        self._cancel = threading.Event()
+
+    def cancel(self) -> None:
+        self._cancel.set()
 
     @Slot()
     def run(self) -> None:
@@ -34,6 +41,10 @@ class ModelDownloadWorker(QObject):
                 total = int(response.headers.get("Content-Length", "0"))
                 received = 0
                 while chunk := response.read(1024 * 1024):
+                    if self._cancel.is_set():
+                        partial.unlink(missing_ok=True)
+                        self.cancelled.emit()
+                        return
                     target.write(chunk)
                     received += len(chunk)
                     percent = int(received * 100 / total) if total else 0
@@ -44,18 +55,40 @@ class ModelDownloadWorker(QObject):
             self.completed.emit(self.destination)
         except Exception as exc:
             partial.unlink(missing_ok=True)
-            self.failed.emit(str(exc))
+            if self._cancel.is_set():
+                self.cancelled.emit()
+            else:
+                self.failed.emit(str(exc))
 
 
 class TranscriptionWorker(QObject):
     progress = Signal(int, str)
     completed = Signal(Path, Path)
     failed = Signal(str)
+    cancelled = Signal()
 
     def __init__(self, source: Path, output_dir: Path, model: Path, ffmpeg: Path, whisper: Path):
         super().__init__()
         self.source, self.output_dir, self.model = source, output_dir, model
         self.ffmpeg, self.whisper = ffmpeg, whisper
+        self._cancel = threading.Event()
+        self._process: subprocess.Popen | None = None
+        self._lock = threading.Lock()
+
+    def cancel(self) -> None:
+        """Request cancellation and kill the active subprocess, if any."""
+        self._cancel.set()
+        with self._lock:
+            process = self._process
+        if process is not None and process.poll() is None:
+            try:
+                process.terminate()
+            except OSError:
+                pass
+
+    def _on_start(self, process: subprocess.Popen) -> None:
+        with self._lock:
+            self._process = process
 
     @Slot()
     def run(self) -> None:
@@ -65,7 +98,14 @@ class TranscriptionWorker(QObject):
                     self.source, self.output_dir, self.model, self.ffmpeg, self.whisper,
                     Path(temp_dir) / "audio.wav",
                     lambda value, text: self.progress.emit(value, text),
+                    on_start=self._on_start,
+                    is_cancelled=self._cancel.is_set,
                 )
             self.completed.emit(txt, srt)
+        except TranscriptionCancelled:
+            self.cancelled.emit()
         except Exception as exc:
-            self.failed.emit(str(exc))
+            if self._cancel.is_set():
+                self.cancelled.emit()
+            else:
+                self.failed.emit(str(exc))
