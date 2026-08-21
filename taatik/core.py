@@ -110,6 +110,7 @@ def transcribe(
     progress: ProgressCallback,
     on_start: Callable[[subprocess.Popen], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
+    engine_label: str = "",
 ) -> tuple[Path, Path]:
     validate_input(source)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -133,10 +134,11 @@ def transcribe(
     # the temp directory, then move the results to the real destination with
     # Python, which handles Unicode names correctly.
     work_base = temporary_wav.parent / "transcript"
-    progress(15, "Transcribing in Hebrew…")
+    where = f" on {engine_label}" if engine_label else ""
+    progress(15, f"Transcribing in Hebrew{where}…")
     run_process(
         transcription_command(whisper, model, temporary_wav, work_base),
-        lambda value, text: progress(15 + int(value * 0.84), text),
+        lambda value, text: progress(15 + int(value * 0.84), f"Transcribing in Hebrew{where}…"),
         on_start=on_start, is_cancelled=is_cancelled,
     )
     work_txt, work_srt = output_file(work_base, ".txt"), output_file(work_base, ".srt")

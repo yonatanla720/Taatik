@@ -99,6 +99,16 @@ class TranscriptionWorker(QObject):
                 self.cancelled.emit()
                 return
             is_last = index == len(self.whisper_engines) - 1
+            # Only distinguish GPU/CPU when more than one engine is bundled
+            # (the Windows CUDA + CPU case). A single engine, such as the
+            # Metal-accelerated macOS build, is left unlabelled to avoid
+            # mislabelling GPU work as CPU.
+            if engine.parent.name == "bin-cuda":
+                engine_label = "GPU"
+            elif len(self.whisper_engines) > 1:
+                engine_label = "CPU"
+            else:
+                engine_label = ""
             try:
                 with tempfile.TemporaryDirectory(prefix="taatik-") as temp_dir:
                     txt, srt = transcribe(
@@ -107,6 +117,7 @@ class TranscriptionWorker(QObject):
                         lambda value, text: self.progress.emit(value, text),
                         on_start=self._on_start,
                         is_cancelled=self._cancel.is_set,
+                        engine_label=engine_label,
                     )
                 self.completed.emit(txt, srt)
                 return
