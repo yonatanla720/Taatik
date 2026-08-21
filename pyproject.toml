@@ -5,16 +5,22 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "taatik"
 version = "1.0.0"
-description = "Private, offline Hebrew transcription for Windows"
+description = "Private, local Hebrew transcription for Windows and macOS"
 requires-python = ">=3.11"
-dependencies = ["PySide6>=6.7,<7"]
+dependencies = [
+    "certifi>=2024.8.30",
+    "PySide6>=6.7,<7",
+]
 
 [project.optional-dependencies]
-dev = ["pyinstaller>=6.10"]
+dev = [
+    "pyinstaller>=6.10",
+    "cmake>=3.25; platform_system == 'Darwin'",
+    "pillow>=10; platform_system == 'Darwin'",
+]
 
 [project.gui-scripts]
 taatik = "taatik.app:main"
 
 [tool.setuptools.packages.find]
 include = ["taatik*"]
-

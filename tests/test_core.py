@@ -1,10 +1,11 @@
 from pathlib import Path
+import os
 import tempfile
 import unittest
 
 from taatik.core import (
     TranscriptionError, conversion_command, parse_progress, transcription_command,
-    output_file, unique_output_base, validate_input,
+    output_file, transcribe, unique_output_base, validate_input,
 )
 
 
@@ -44,6 +45,46 @@ class CoreTests(unittest.TestCase):
             bad.touch()
             with self.assertRaisesRegex(TranscriptionError, "not supported"):
                 validate_input(bad)
+
+    @unittest.skipIf(os.name == "nt", "uses POSIX test executables")
+    def test_transcription_pipeline_generates_both_outputs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "recording.wav"
+            source.touch()
+            model = root / "model.bin"
+            model.touch()
+            ffmpeg = root / "ffmpeg"
+            ffmpeg.write_text(
+                '#!/bin/sh\nfor output do :; done\nprintf "wav" > "$output"\n',
+                encoding="utf-8",
+            )
+            whisper = root / "whisper-cli"
+            whisper.write_text(
+                "#!/bin/sh\n"
+                "while [ \"$#\" -gt 0 ]; do\n"
+                "  if [ \"$1\" = \"-of\" ]; then base=$2; fi\n"
+                "  shift\n"
+                "done\n"
+                'printf "שלום\\n" > "$base.txt"\n'
+                'printf "1\\n00:00:00,000 --> 00:00:01,000\\nשלום\\n" > "$base.srt"\n',
+                encoding="utf-8",
+            )
+            ffmpeg.chmod(0o755)
+            whisper.chmod(0o755)
+
+            txt, srt = transcribe(
+                source,
+                root / "output",
+                model,
+                ffmpeg,
+                whisper,
+                root / "temporary.wav",
+                lambda _value, _message: None,
+            )
+
+            self.assertEqual(txt.read_text(encoding="utf-8"), "שלום\n")
+            self.assertIn("00:00:00,000 --> 00:00:01,000", srt.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import ssl
 import tempfile
 import urllib.request
 from pathlib import Path
 
+import certifi
 from PySide6.QtCore import QObject, Signal, Slot
 
 from .config import MIN_MODEL_BYTES, MODEL_URL
@@ -25,7 +27,10 @@ class ModelDownloadWorker(QObject):
         try:
             self.destination.parent.mkdir(parents=True, exist_ok=True)
             request = urllib.request.Request(MODEL_URL, headers={"User-Agent": "Taatik/1.0"})
-            with urllib.request.urlopen(request, timeout=60) as response, partial.open("wb") as target:
+            tls_context = ssl.create_default_context(cafile=certifi.where())
+            with urllib.request.urlopen(
+                request, timeout=60, context=tls_context
+            ) as response, partial.open("wb") as target:
                 total = int(response.headers.get("Content-Length", "0"))
                 received = 0
                 while chunk := response.read(1024 * 1024):

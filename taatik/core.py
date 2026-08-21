@@ -70,14 +70,15 @@ def run_process(command: list[str], progress: ProgressCallback | None = None) ->
 
     tail: list[str] = []
     assert process.stdout is not None
-    for line in process.stdout:
-        line = line.strip()
-        if line:
-            tail.append(line)
-            tail = tail[-12:]
-            parsed = parse_progress(line)
-            if parsed is not None and progress:
-                progress(parsed, "Transcribing…")
+    with process.stdout:
+        for line in process.stdout:
+            line = line.strip()
+            if line:
+                tail.append(line)
+                tail = tail[-12:]
+                parsed = parse_progress(line)
+                if parsed is not None and progress:
+                    progress(parsed, "Transcribing…")
     if process.wait() != 0:
         detail = "\n".join(tail) or "The component stopped unexpectedly."
         raise TranscriptionError(detail)

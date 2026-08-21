@@ -20,6 +20,8 @@ SUPPORTED_EXTENSIONS = {
 
 
 def data_dir() -> Path:
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / APP_NAME
     root = os.environ.get("LOCALAPPDATA")
     if root:
         return Path(root) / APP_NAME
