@@ -67,11 +67,18 @@ class TranscriptionWorker(QObject):
     failed = Signal(str)
     cancelled = Signal()
 
-    def __init__(self, source: Path, output_dir: Path, model: Path, ffmpeg: Path, whisper_engines: list[Path]):
+    def __init__(
+        self, source: Path, output_dir: Path, model: Path, ffmpeg: Path, whisper_engines: list[Path],
+        separate_speakers: bool = False, num_speakers: int = 0,
+        diarization_models: tuple[Path, Path] | None = None,
+    ):
         super().__init__()
         self.source, self.output_dir, self.model = source, output_dir, model
         self.ffmpeg = ffmpeg
         self.whisper_engines = list(whisper_engines)
+        self.separate_speakers = separate_speakers
+        self.num_speakers = num_speakers
+        self.diarization_models = diarization_models
         self._cancel = threading.Event()
         self._process: subprocess.Popen | None = None
         self._lock = threading.Lock()
@@ -118,6 +125,9 @@ class TranscriptionWorker(QObject):
                         on_start=self._on_start,
                         is_cancelled=self._cancel.is_set,
                         engine_label=engine_label,
+                        separate_speakers=self.separate_speakers,
+                        num_speakers=self.num_speakers,
+                        diarization_models=self.diarization_models,
                     )
                 self.completed.emit(txt, srt)
                 return

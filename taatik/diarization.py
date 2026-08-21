@@ -58,11 +58,16 @@ def diarize(
     if sample_rate != sd.sample_rate:
         raise TranscriptionError("Audio sample rate does not match the speaker models.")
 
+    last = -1
+
     def on_progress(done: int, total: int) -> int:
+        nonlocal last
         if is_cancelled and is_cancelled():
             raise TranscriptionCancelled()
-        if progress and total:
-            progress(int(done / total * 100))
+        pct = int(done / total * 100) if total else 0
+        if progress and pct != last:
+            last = pct
+            progress(pct)
         return 0
 
     result = sd.process(audio, callback=on_progress).sort_by_start_time()

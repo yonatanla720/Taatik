@@ -55,6 +55,19 @@ def bundled_tool(name: str) -> Path:
     return candidates[0]
 
 
+def diarization_models() -> tuple[Path, Path]:
+    """Return the (segmentation, embedding) ONNX model paths for diarization."""
+    base = _bundle_root()
+    frozen = base / "diarization"
+    directory = frozen if frozen.is_dir() else base / "vendor" / "diarization"
+    return directory / "segmentation.onnx", directory / "embedding.onnx"
+
+
+def diarization_ready() -> bool:
+    segmentation, embedding = diarization_models()
+    return segmentation.is_file() and embedding.is_file()
+
+
 def _nvidia_driver_present() -> bool:
     """True when the NVIDIA CUDA driver is installed, so the GPU engine can run."""
     if sys.platform != "win32":

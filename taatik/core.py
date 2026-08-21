@@ -144,6 +144,9 @@ def transcribe(
     on_start: Callable[[subprocess.Popen], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
     engine_label: str = "",
+    separate_speakers: bool = False,
+    num_speakers: int = 0,
+    diarization_models: tuple[Path, Path] | None = None,
 ) -> tuple[Path, Path]:
     validate_input(source)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -178,7 +181,25 @@ def transcribe(
     if not work_txt.is_file() or not work_srt.is_file():
         raise TranscriptionError("Transcription finished, but the output files were not created.")
     txt, srt = output_file(base, ".txt"), output_file(base, ".srt")
-    shutil.move(str(work_txt), str(txt))
-    shutil.move(str(work_srt), str(srt))
+    if separate_speakers and diarization_models is not None:
+        # Diarize the prepared audio and rewrite the transcript with speaker
+        # labels. Imported lazily so the app runs without the ONNX dependency.
+        from .diarization import diarize, label_transcript
+
+        segmentation, embedding = diarization_models
+        progress(84, "Separating speakers…")
+        segments = diarize(
+            temporary_wav, segmentation, embedding, num_speakers,
+            progress=lambda pct: progress(84 + int(pct * 0.15), "Separating speakers…"),
+            is_cancelled=is_cancelled,
+        )
+        labelled_txt, labelled_srt = label_transcript(
+            work_srt.read_text(encoding="utf-8"), segments, num_speakers
+        )
+        txt.write_text(labelled_txt, encoding="utf-8")
+        srt.write_text(labelled_srt, encoding="utf-8")
+    else:
+        shutil.move(str(work_txt), str(txt))
+        shutil.move(str(work_srt), str(srt))
     progress(100, "Done")
     return txt, srt

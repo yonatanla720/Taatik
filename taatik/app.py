@@ -10,12 +10,15 @@ from PySide6.QtGui import (
     QKeySequence, QPixmap, QShortcut,
 )
 from PySide6.QtWidgets import (
-    QApplication, QDialog, QDialogButtonBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QProgressBar, QPushButton, QTextBrowser, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
+    QMainWindow, QMessageBox, QProgressBar, QPushButton, QSpinBox, QTextBrowser, QVBoxLayout, QWidget,
 )
 
 from . import __version__
-from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_is_ready, model_path, whisper_engines
+from .config import (
+    SUPPORTED_EXTENSIONS, bundled_tool, diarization_models, diarization_ready, model_is_ready,
+    model_path, whisper_engines,
+)
 from .core import format_duration, media_duration, output_file, unique_output_base
 from .icon import icon_png
 from .workers import ModelDownloadWorker, TranscriptionWorker
@@ -162,6 +165,23 @@ class MainWindow(QMainWindow):
         self.folder_button.clicked.connect(self.choose_output)
         folder_row.addWidget(self.folder_label, 1)
         folder_row.addWidget(self.folder_button)
+        diar_row = QHBoxLayout()
+        self.diar_check = QCheckBox("Separate speakers")
+        self.speaker_count = QSpinBox()
+        self.speaker_count.setRange(0, 10)
+        self.speaker_count.setSpecialValueText("Auto")
+        self.speaker_count.setPrefix("Speakers: ")
+        self.speaker_count.setEnabled(False)
+        self.diar_check.toggled.connect(self.speaker_count.setEnabled)
+        if diarization_ready():
+            self.diar_check.setToolTip("Label the transcript by speaker (Speaker 1, Speaker 2, …).")
+            self.speaker_count.setToolTip("Number of speakers, or Auto to detect.")
+        else:
+            self.diar_check.setEnabled(False)
+            self.diar_check.setToolTip("Speaker separation is unavailable in this build.")
+        diar_row.addWidget(self.diar_check)
+        diar_row.addStretch(1)
+        diar_row.addWidget(self.speaker_count)
         self.output_preview = QLabel("")
         self.output_preview.setObjectName("status")
         self.output_preview.setWordWrap(True)
@@ -193,6 +213,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.drop)
         layout.addWidget(self.file_label)
         layout.addLayout(folder_row)
+        layout.addLayout(diar_row)
         layout.addWidget(self.output_preview)
         layout.addWidget(self.progress)
         layout.addLayout(status_row)
@@ -349,8 +370,12 @@ class MainWindow(QMainWindow):
 
     def _begin_transcription(self) -> None:
         assert self.source and self.output_dir
+        separate = self.diar_check.isChecked()
         worker = TranscriptionWorker(
-            self.source, self.output_dir, model_path(), bundled_tool("ffmpeg"), whisper_engines()
+            self.source, self.output_dir, model_path(), bundled_tool("ffmpeg"), whisper_engines(),
+            separate_speakers=separate,
+            num_speakers=self.speaker_count.value(),
+            diarization_models=diarization_models() if separate else None,
         )
         self._launch(worker, self._completed)
 
@@ -421,6 +446,8 @@ class MainWindow(QMainWindow):
         self.stop_button.setEnabled(busy)
         self.drop.setEnabled(not busy)
         self.folder_button.setEnabled(not busy)
+        self.diar_check.setEnabled(not busy and diarization_ready())
+        self.speaker_count.setEnabled(not busy and self.diar_check.isChecked())
         if busy:
             self.progress.setValue(0)
             self._elapsed.restart()
