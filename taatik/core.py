@@ -101,6 +101,7 @@ def run_process(
     progress: ProgressCallback | None = None,
     on_start: Callable[[subprocess.Popen], None] | None = None,
     is_cancelled: Callable[[], bool] | None = None,
+    log: Callable[[str], None] | None = None,
 ) -> None:
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     try:
@@ -122,6 +123,8 @@ def run_process(
             if line:
                 tail.append(line)
                 tail = tail[-12:]
+                if log:
+                    log(line)
                 parsed = parse_progress(line)
                 if parsed is not None and progress:
                     progress(parsed, "Transcribing…")
@@ -147,7 +150,12 @@ def transcribe(
     separate_speakers: bool = False,
     num_speakers: int = 0,
     diarization_models: tuple[Path, Path] | None = None,
+    log: Callable[[str], None] | None = None,
 ) -> tuple[Path, Path]:
+    def note(message: str) -> None:
+        if log:
+            log(message)
+
     validate_input(source)
     output_dir.mkdir(parents=True, exist_ok=True)
     for tool in (ffmpeg, whisper):
@@ -157,9 +165,10 @@ def transcribe(
         raise TranscriptionError("The Hebrew transcription model is not installed.")
 
     progress(5, "Preparing the audio…")
+    note(f"Converting {source.name} to 16 kHz mono audio…")
     run_process(
         conversion_command(ffmpeg, source, temporary_wav),
-        on_start=on_start, is_cancelled=is_cancelled,
+        on_start=on_start, is_cancelled=is_cancelled, log=log,
     )
     if is_cancelled and is_cancelled():
         raise TranscriptionCancelled()
@@ -172,10 +181,11 @@ def transcribe(
     work_base = temporary_wav.parent / "transcript"
     where = f" on {engine_label}" if engine_label else ""
     progress(15, f"Transcribing in Hebrew{where}…")
+    note(f"Transcribing in Hebrew{where}…")
     run_process(
         transcription_command(whisper, model, temporary_wav, work_base),
         lambda value, text: progress(15 + int(value * 0.84), f"Transcribing in Hebrew{where}…"),
-        on_start=on_start, is_cancelled=is_cancelled,
+        on_start=on_start, is_cancelled=is_cancelled, log=log,
     )
     work_txt, work_srt = output_file(work_base, ".txt"), output_file(work_base, ".srt")
     if not work_txt.is_file() or not work_srt.is_file():
@@ -188,6 +198,7 @@ def transcribe(
 
         segmentation, embedding = diarization_models
         progress(84, "Separating speakers…")
+        note("Separating speakers…")
         segments = diarize(
             temporary_wav, segmentation, embedding, num_speakers,
             progress=lambda pct: progress(84 + int(pct * 0.15), "Separating speakers…"),
@@ -201,5 +212,6 @@ def transcribe(
     else:
         shutil.move(str(work_txt), str(txt))
         shutil.move(str(work_srt), str(srt))
+    note(f"Saved {txt.name} and {srt.name}")
     progress(100, "Done")
     return txt, srt

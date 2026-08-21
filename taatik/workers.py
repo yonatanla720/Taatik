@@ -66,6 +66,7 @@ class TranscriptionWorker(QObject):
     completed = Signal(Path, Path)
     failed = Signal(str)
     cancelled = Signal()
+    log = Signal(str)
 
     def __init__(
         self, source: Path, output_dir: Path, model: Path, ffmpeg: Path, whisper_engines: list[Path],
@@ -128,6 +129,7 @@ class TranscriptionWorker(QObject):
                         separate_speakers=self.separate_speakers,
                         num_speakers=self.num_speakers,
                         diarization_models=self.diarization_models,
+                        log=self.log.emit,
                     )
                 self.completed.emit(txt, srt)
                 return

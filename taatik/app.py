@@ -11,7 +11,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QDialog, QDialogButtonBox, QFileDialog, QFrame, QHBoxLayout, QLabel,
-    QMainWindow, QMessageBox, QProgressBar, QPushButton, QSpinBox, QTextBrowser,
+    QMainWindow, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QSpinBox, QTextBrowser,
     QVBoxLayout, QWidget,
 )
 
@@ -55,6 +55,12 @@ _STYLESHEET = """
     #danger:disabled {{ color: {disabled_fg}; background: {disabled_bg}; border-color: {border}; }}
 
     #status {{ color: {muted}; font-size: 13px; }}
+    #linkBtn {{ background: transparent; border: 0; min-height: 0; padding: 2px;
+                color: {muted}; font-size: 12px; font-weight: 600; }}
+    #linkBtn:hover {{ background: transparent; color: {accent}; }}
+    #logView {{ background: {surface}; border: 1px solid {border}; border-radius: 8px;
+                color: {muted}; padding: 6px; font-family: 'Consolas','Courier New',monospace;
+                font-size: 12px; }}
     QProgressBar {{ min-height: 8px; max-height: 8px; border: 0; border-radius: 4px;
                     background: {chip_bg}; }}
     QProgressBar::chunk {{ background: {accent}; border-radius: 4px; }}
@@ -139,6 +145,7 @@ class DropArea(QFrame):
         self.setAcceptDrops(True)
         self.setObjectName("dropArea")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setMinimumHeight(160)
         self.setToolTip("Drop a file here, or click to browse (Ctrl+O)")
         self.setAccessibleName("File drop area")
         self.setAccessibleDescription("Drop an audio or video file here, or click to browse.")
@@ -309,11 +316,31 @@ class MainWindow(QMainWindow):
         self.stop_button.setObjectName("danger")
         self.stop_button.clicked.connect(self.cancel)
         self.stop_button.hide()
+
+        # Collapsible live log.
+        self.log_toggle = QPushButton("Show log")
+        self.log_toggle.setObjectName("linkBtn")
+        self.log_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.log_toggle.clicked.connect(self._toggle_log)
+        self.log_view = QPlainTextEdit()
+        self.log_view.setObjectName("logView")
+        self.log_view.setReadOnly(True)
+        self.log_view.setMaximumBlockCount(4000)
+        self.log_view.setFixedHeight(150)
+        self.log_view.hide()
+        toggle_row = QHBoxLayout()
+        toggle_row.addWidget(self.log_toggle)
+        toggle_row.addStretch(1)
+
         layout.addWidget(self.progress)
         layout.addLayout(status_row)
+        layout.addLayout(toggle_row)
+        layout.addWidget(self.log_view)
         layout.addWidget(self.start_button)
         layout.addWidget(self.stop_button)
         self.setCentralWidget(root)
+        if self.settings.value("show_log", False, type=bool):
+            self._toggle_log()
         self._setup_accessibility()
         self._build_menu()
         self._apply_theme()
@@ -351,6 +378,8 @@ class MainWindow(QMainWindow):
         self.folder_button.setAccessibleName("Choose output folder")
         self.start_button.setAccessibleName("Create transcript")
         self.stop_button.setAccessibleName("Stop")
+        self.log_view.setAccessibleName("Activity log")
+        self.log_toggle.setAccessibleName("Toggle activity log")
         self.setTabOrder(self.folder_button, self.start_button)
 
     def _build_menu(self) -> None:
@@ -445,6 +474,7 @@ class MainWindow(QMainWindow):
     def start(self) -> None:
         if not self.source or not self.output_dir:
             return
+        self.log_view.clear()
         self._busy(True)
         if not model_is_ready():
             answer = QMessageBox.question(
@@ -482,6 +512,8 @@ class MainWindow(QMainWindow):
         worker.completed.connect(completed)
         worker.failed.connect(self._failed)
         worker.cancelled.connect(self._cancelled)
+        if hasattr(worker, "log"):
+            worker.log.connect(self._log)
         self.thread.worker = worker  # keep the worker alive
         self.thread.start()
 
@@ -532,6 +564,17 @@ class MainWindow(QMainWindow):
 
     def _update_elapsed(self) -> None:
         self.elapsed_label.setText(format_duration(self._elapsed.elapsed() / 1000))
+
+    def _toggle_log(self) -> None:
+        show = not self.log_view.isVisible()
+        self.log_view.setVisible(show)
+        self.log_toggle.setText("Hide log" if show else "Show log")
+        self.settings.setValue("show_log", show)
+        if show and self.isVisible():
+            self.resize(self.width(), max(self.height(), 760))
+
+    def _log(self, line: str) -> None:
+        self.log_view.appendPlainText(line)
 
     def _busy(self, busy: bool) -> None:
         self.is_busy = busy
