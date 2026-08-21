@@ -35,6 +35,8 @@ if (-not (Test-Path ".venv")) { py -3.11 -m venv .venv }
 & .\.venv\Scripts\python.exe -m pip install ".[dev]"
 & .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 & .\.venv\Scripts\pyinstaller.exe --noconfirm --clean taatik.spec
+& .\dist\Taatik\Taatik.exe --self-test
+if ($LASTEXITCODE -ne 0) { throw "The packaged app failed its bundled-component self-check." }
 
 $Iscc = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
 if (-not $Iscc) {

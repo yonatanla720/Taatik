@@ -5,13 +5,13 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QThread, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QCloseEvent, QDesktopServices, QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QVBoxLayout, QWidget,
 )
 
-from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_path
+from .config import SUPPORTED_EXTENSIONS, bundled_tool, model_is_ready, model_path
 from .workers import ModelDownloadWorker, TranscriptionWorker
 
 
@@ -57,6 +57,7 @@ class MainWindow(QMainWindow):
         self.source: Path | None = None
         self.output_dir: Path | None = None
         self.thread: QThread | None = None
+        self.is_busy = False
         self.settings = QSettings("Taatik", "Taatik")
         self.setWindowTitle("Taatik — Hebrew Transcription")
         self.resize(680, 560)
@@ -79,10 +80,10 @@ class MainWindow(QMainWindow):
         folder_row = QHBoxLayout()
         self.folder_label = QLabel("Output folder: not selected")
         self.folder_label.setWordWrap(True)
-        folder_button = QPushButton("Choose folder")
-        folder_button.clicked.connect(self.choose_output)
+        self.folder_button = QPushButton("Choose folder")
+        self.folder_button.clicked.connect(self.choose_output)
         folder_row.addWidget(self.folder_label, 1)
-        folder_row.addWidget(folder_button)
+        folder_row.addWidget(self.folder_button)
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
@@ -140,7 +141,7 @@ class MainWindow(QMainWindow):
         if not self.source or not self.output_dir:
             return
         self._busy(True)
-        if not model_path().is_file():
+        if not model_is_ready():
             answer = QMessageBox.question(
                 self, "Download Hebrew model",
                 "Taatik needs to download the Hebrew language model once (about 1.6 GB). "
@@ -178,14 +179,14 @@ class MainWindow(QMainWindow):
         self.progress.setValue(value)
         self.status.setText(message)
 
-    def _completed(self, txt: Path, _srt: Path) -> None:
+    def _completed(self, txt: Path, srt: Path) -> None:
         self._finish_thread()
         self._busy(False)
         self.progress.setValue(100)
         self.status.setText("Done — text and subtitle files were created.")
         message = QMessageBox(self)
         message.setWindowTitle("Transcript ready")
-        message.setText(f"Saved {txt.name} and {txt.with_suffix('.srt').name}")
+        message.setText(f"Saved {txt.name} and {srt.name}")
         message.setInformativeText(str(txt.parent))
         open_button = message.addButton("Open folder", QMessageBox.ButtonRole.AcceptRole)
         message.addButton("Close", QMessageBox.ButtonRole.RejectRole)
@@ -207,10 +208,22 @@ class MainWindow(QMainWindow):
             self.thread = None
 
     def _busy(self, busy: bool) -> None:
+        self.is_busy = busy
         self.start_button.setEnabled(not busy and self.source is not None)
         self.drop.setEnabled(not busy)
+        self.folder_button.setEnabled(not busy)
         if busy:
             self.progress.setValue(0)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        if self.is_busy:
+            event.ignore()
+            QMessageBox.information(
+                self, "Taatik is still working",
+                "Please wait for the current download or transcription to finish before closing Taatik.",
+            )
+            return
+        event.accept()
 
 
 def main() -> int:

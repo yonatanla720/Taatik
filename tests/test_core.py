@@ -4,7 +4,7 @@ import unittest
 
 from taatik.core import (
     TranscriptionError, conversion_command, parse_progress, transcription_command,
-    unique_output_base, validate_input,
+    output_file, unique_output_base, validate_input,
 )
 
 
@@ -34,6 +34,9 @@ class CoreTests(unittest.TestCase):
             output = Path(directory)
             (output / "lesson.txt").write_text("old", encoding="utf-8")
             self.assertEqual(unique_output_base(Path("lesson.mp4"), output).name, "lesson (2)")
+
+    def test_output_extension_preserves_dots_in_recording_name(self):
+        self.assertEqual(output_file(Path("lesson.part1"), ".txt"), Path("lesson.part1.txt"))
 
     def test_rejects_unsupported_input(self):
         with tempfile.TemporaryDirectory() as directory:

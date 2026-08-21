@@ -30,6 +30,14 @@ def model_path() -> Path:
     return data_dir() / "models" / MODEL_FILENAME
 
 
+def model_is_ready(path: Path | None = None) -> bool:
+    candidate = path or model_path()
+    try:
+        return candidate.is_file() and candidate.stat().st_size >= MIN_MODEL_BYTES
+    except OSError:
+        return False
+
+
 def bundled_tool(name: str) -> Path:
     """Locate an executable in a PyInstaller bundle or a source checkout."""
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
@@ -39,4 +47,3 @@ def bundled_tool(name: str) -> Path:
         if candidate.exists():
             return candidate
     return candidates[0]
-

@@ -25,10 +25,15 @@ def output_base(input_path: Path, output_dir: Path) -> Path:
     return output_dir / input_path.stem
 
 
+def output_file(base: Path, extension: str) -> Path:
+    """Append an output extension without discarding dots in the recording name."""
+    return Path(f"{base}{extension}")
+
+
 def unique_output_base(input_path: Path, output_dir: Path) -> Path:
     candidate = output_base(input_path, output_dir)
     number = 2
-    while candidate.with_suffix(".txt").exists() or candidate.with_suffix(".srt").exists():
+    while output_file(candidate, ".txt").exists() or output_file(candidate, ".srt").exists():
         candidate = output_dir / f"{input_path.stem} ({number})"
         number += 1
     return candidate
@@ -103,7 +108,7 @@ def transcribe(
         transcription_command(whisper, model, temporary_wav, base),
         lambda value, text: progress(15 + int(value * 0.84), text),
     )
-    txt, srt = base.with_suffix(".txt"), base.with_suffix(".srt")
+    txt, srt = output_file(base, ".txt"), output_file(base, ".srt")
     if not txt.is_file() or not srt.is_file():
         raise TranscriptionError("Transcription finished, but the output files were not created.")
     progress(100, "Done")
