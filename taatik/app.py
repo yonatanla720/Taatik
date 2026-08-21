@@ -5,7 +5,9 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QSettings, QThread, Qt, QUrl, Signal
-from PySide6.QtGui import QCloseEvent, QDesktopServices, QDragEnterEvent, QDropEvent, QIcon, QPixmap
+from PySide6.QtGui import (
+    QCloseEvent, QDesktopServices, QDragEnterEvent, QDragLeaveEvent, QDropEvent, QIcon, QPixmap,
+)
 from PySide6.QtWidgets import (
     QApplication, QFileDialog, QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox,
     QProgressBar, QPushButton, QVBoxLayout, QWidget,
@@ -52,12 +54,25 @@ class DropArea(QFrame):
         if path:
             self.file_selected.emit(Path(path))
 
+    def _set_drag_active(self, active: bool) -> None:
+        if self.property("dragActive") == active:
+            return
+        self.setProperty("dragActive", active)
+        # Re-evaluate the property-dependent stylesheet rule.
+        self.style().unpolish(self)
+        self.style().polish(self)
+
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
         urls = event.mimeData().urls()
         if len(urls) == 1 and Path(urls[0].toLocalFile()).suffix.lower() in SUPPORTED_EXTENSIONS:
+            self._set_drag_active(True)
             event.acceptProposedAction()
 
+    def dragLeaveEvent(self, event: QDragLeaveEvent) -> None:
+        self._set_drag_active(False)
+
     def dropEvent(self, event: QDropEvent) -> None:
+        self._set_drag_active(False)
         self.file_selected.emit(Path(event.mimeData().urls()[0].toLocalFile()))
 
 
@@ -121,6 +136,7 @@ class MainWindow(QMainWindow):
             QWidget { background: #f7f7f5; color: #202421; font: 15px 'Segoe UI'; }
             #heading { font-size: 28px; font-weight: 650; color: #173a2c; }
             #dropArea { border: 2px dashed #8aa598; border-radius: 12px; background: #ffffff; }
+            #dropArea[dragActive="true"] { border-color: #176b4b; background: #eaf3ee; }
             #dropTitle { font-size: 18px; font-weight: 600; }
             QPushButton { padding: 9px 16px; min-height: 20px; border: 1px solid #aab5af; border-radius: 7px; background: white; }
             QPushButton:hover { background: #eef3f0; }
