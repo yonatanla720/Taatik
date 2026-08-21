@@ -5,5 +5,5 @@ build/
 dist/
 release/
 vendor/
+outputs/
 *.egg-info/
-
