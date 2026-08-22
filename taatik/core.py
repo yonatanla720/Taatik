@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import shutil
 import subprocess
@@ -192,18 +193,21 @@ def transcribe(
         raise TranscriptionError("Transcription finished, but the output files were not created.")
     txt, srt = output_file(base, ".txt"), output_file(base, ".srt")
     if separate_speakers and diarization_models is not None:
-        # Diarize the prepared audio and rewrite the transcript with speaker
-        # labels. Imported lazily so the app runs without the ONNX dependency.
-        from .diarization import diarize, label_transcript
+        # Diarize in a separate process so the heavy, uninterruptible ONNX work
+        # cannot freeze the app; the child writes the speaker segments as JSON,
+        # then we merge them with the transcript here (fast, pure Python).
+        from .config import diarization_command
+        from .diarization import label_transcript
 
-        segmentation, embedding = diarization_models
         progress(84, "Separating speakers…")
         note("Separating speakers…")
-        segments = diarize(
-            temporary_wav, segmentation, embedding, num_speakers,
-            progress=lambda pct: progress(84 + int(pct * 0.15), "Separating speakers…"),
-            is_cancelled=is_cancelled,
+        segments_json = temporary_wav.parent / "diarization.json"
+        run_process(
+            diarization_command(temporary_wav, segments_json),
+            lambda value, text: progress(84 + int(value * 0.15), "Separating speakers…"),
+            on_start=on_start, is_cancelled=is_cancelled, log=log,
         )
+        segments = json.loads(segments_json.read_text(encoding="utf-8"))
         labelled_txt, labelled_srt = label_transcript(
             work_srt.read_text(encoding="utf-8"), segments, num_speakers
         )

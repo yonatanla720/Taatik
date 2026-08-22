@@ -1,7 +1,7 @@
+import os
 import subprocess
 import sys
 
-from taatik.app import main
 from taatik.config import bundled_tool, diarization_models, diarization_ready
 
 
@@ -40,9 +40,36 @@ def diar_self_test(wav: str) -> int:
     return 0 if segments else 1
 
 
+def run_diarization(wav: str, out_json: str) -> int:
+    """Diarize a wav and write the segments as JSON. Run as a child process so
+    the heavy, uninterruptible ONNX work never blocks or freezes the app."""
+    import json
+
+    from taatik.diarization import diarize
+
+    def report(pct: int) -> None:
+        # Write straight to fd 1 so progress reaches the parent even when a
+        # windowed frozen build has no real sys.stdout object.
+        try:
+            os.write(1, f"progress = {pct}%\n".encode("utf-8"))
+        except OSError:
+            pass
+
+    segmentation, embedding = diarization_models()
+    segments = diarize(wav, segmentation, embedding, progress=report)
+    with open(out_json, "w", encoding="utf-8") as handle:
+        json.dump(segments, handle)
+    return 0
+
+
 if __name__ == "__main__":
     if "--self-test" in sys.argv:
         raise SystemExit(self_test())
     if "--diar-self-test" in sys.argv:
         raise SystemExit(diar_self_test(sys.argv[sys.argv.index("--diar-self-test") + 1]))
+    if "--diarize" in sys.argv:
+        index = sys.argv.index("--diarize")
+        raise SystemExit(run_diarization(sys.argv[index + 1], sys.argv[index + 2]))
+    from taatik.app import main
+
     raise SystemExit(main())

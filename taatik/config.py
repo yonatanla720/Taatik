@@ -68,6 +68,18 @@ def diarization_ready() -> bool:
     return segmentation.is_file() and embedding.is_file()
 
 
+def diarization_command(wav: Path, out_json: Path) -> list[str]:
+    """Command that diarizes ``wav`` in a separate process and writes JSON.
+
+    Frozen builds re-invoke the app executable with ``--diarize`` (the models
+    and ONNX runtime are already bundled); from source, run the launcher.
+    """
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--diarize", str(wav), str(out_json)]
+    launcher = Path(__file__).resolve().parent.parent / "taatik_launcher.py"
+    return [sys.executable, str(launcher), "--diarize", str(wav), str(out_json)]
+
+
 def _nvidia_driver_present() -> bool:
     """True when the NVIDIA CUDA driver is installed, so the GPU engine can run."""
     if sys.platform != "win32":
