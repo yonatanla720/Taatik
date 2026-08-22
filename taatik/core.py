@@ -124,11 +124,14 @@ def run_process(
             if line:
                 tail.append(line)
                 tail = tail[-12:]
-                if log:
-                    log(line)
                 parsed = parse_progress(line)
-                if parsed is not None and progress:
-                    progress(parsed, "Transcribing…")
+                if parsed is not None:
+                    # Progress lines drive the bar/status; keep them out of the
+                    # log so it is not flooded with hundreds of percent lines.
+                    if progress:
+                        progress(parsed, "Transcribing…")
+                elif log:
+                    log(line)
     returncode = process.wait()
     if is_cancelled and is_cancelled():
         raise TranscriptionCancelled()
@@ -185,7 +188,7 @@ def transcribe(
     note(f"Transcribing in Hebrew{where}…")
     run_process(
         transcription_command(whisper, model, temporary_wav, work_base),
-        lambda value, text: progress(15 + int(value * 0.84), f"Transcribing in Hebrew{where}…"),
+        lambda value, text: progress(15 + int(value * 0.84), f"Transcribing in Hebrew{where}… {value}%"),
         on_start=on_start, is_cancelled=is_cancelled, log=log,
     )
     work_txt, work_srt = output_file(work_base, ".txt"), output_file(work_base, ".srt")
@@ -204,7 +207,7 @@ def transcribe(
         segments_json = temporary_wav.parent / "diarization.json"
         run_process(
             diarization_command(temporary_wav, segments_json),
-            lambda value, text: progress(84 + int(value * 0.15), "Separating speakers…"),
+            lambda value, text: progress(84 + int(value * 0.15), f"Separating speakers… {value}%"),
             on_start=on_start, is_cancelled=is_cancelled, log=log,
         )
         segments = json.loads(segments_json.read_text(encoding="utf-8"))
